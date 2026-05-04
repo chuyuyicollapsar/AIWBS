@@ -1,0 +1,84 @@
+.root {
+    -fx-font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+    -fx-background-color: #0f1730;
+}
+
+.button {
+    -fx-background-color: #172447;
+    -fx-text-fill: #e7ecff;
+    -fx-background-radius: 8;
+    -fx-border-color: rgba(255,255,255,0.10);
+    -fx-border-radius: 8;
+}
+
+.button:hover {
+    -fx-background-color: #22335f;
+}
+
+.button.primary-action {
+    -fx-background-color: #d7bb74;
+    -fx-text-fill: #11182d;
+    -fx-background-radius: 999;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-effect: dropshadow(gaussian, rgba(215,187,116,0.25), 18, 0, 0, 4);
+}
+
+.button.primary-action:hover {
+    -fx-background-color: #e3c982;
+}
+
+.button.icon-button {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
+    -fx-padding: 0;
+    -fx-content-display: graphic-only;
+    -fx-alignment: center;
+}
+
+.button.icon-button:hover {
+    -fx-background-color: rgba(255,255,255,0.08);
+    -fx-background-radius: 6;
+}
+
+.button:disabled {
+    -fx-opacity: 0.35;
+}
+
+.label {
+    -fx-text-fill: #e7ecff;
+}
+
+.text-field,
+.password-field,
+.text-area {
+    -fx-control-inner-background: #111a34;
+    -fx-text-fill: #edf2ff;
+    -fx-highlight-fill: #d7bb74;
+    -fx-highlight-text-fill: #11182d;
+    -fx-background-color: #111a34;
+    -fx-background-radius: 8;
+    -fx-border-color: #26365f;
+    -fx-border-radius: 8;
+}
+
+.text-area.chapter-editor {
+    -fx-control-inner-background: #223154;
+    -fx-background-color: #223154;
+    -fx-border-color: #3a4b73;
+}
+
+.text-area.chapter-editor .content {
+    -fx-background-color: #223154;
+}
+
+.context-menu {
+    -fx-background-color: #111a34;
+    -fx-border-color: #26365f;
+}
+
+.menu-item .label {
+    -fx-text-fill: #e7ecff;
+}
