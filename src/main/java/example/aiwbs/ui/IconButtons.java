@@ -97,6 +97,52 @@ public final class IconButtons {
         return iconButton(icon);
     }
 
+    public static Button outlineButton() {
+        Pane icon = baseIcon();
+        addBulletLine(icon, 8);
+        addBulletLine(icon, 15);
+        addBulletLine(icon, 22);
+        return iconButton(icon);
+    }
+
+    public static Button outlineActiveButton() {
+        Pane icon = new Pane();
+        icon.setPrefSize(30, 30);
+        javafx.scene.shape.Rectangle frame = new javafx.scene.shape.Rectangle(4, 4, 22, 22);
+        frame.setArcWidth(8);
+        frame.setArcHeight(8);
+        frame.setFill(Color.TRANSPARENT);
+        frame.setStroke(Color.web("#d7bb74"));
+        frame.setStrokeWidth(2.2);
+        icon.getChildren().add(frame);
+        addBulletLineActive(icon, 8);
+        addBulletLineActive(icon, 15);
+        addBulletLineActive(icon, 22);
+        return iconButton(icon);
+    }
+
+    private static void addBulletLine(Pane pane, double y) {
+        javafx.scene.shape.Circle dot = new javafx.scene.shape.Circle(9, y, 2);
+        dot.setFill(Color.web("#dbe4ff"));
+        pane.getChildren().add(dot);
+        Line line = new Line(13, y, 22, y);
+        line.setStroke(Color.web("#dbe4ff"));
+        line.setStrokeWidth(1.8);
+        line.setStrokeLineCap(javafx.scene.shape.StrokeLineCap.ROUND);
+        pane.getChildren().add(line);
+    }
+
+    private static void addBulletLineActive(Pane pane, double y) {
+        javafx.scene.shape.Circle dot = new javafx.scene.shape.Circle(9, y, 2);
+        dot.setFill(Color.web("#d7bb74"));
+        pane.getChildren().add(dot);
+        Line line = new Line(13, y, 22, y);
+        line.setStroke(Color.web("#d7bb74"));
+        line.setStrokeWidth(1.8);
+        line.setStrokeLineCap(javafx.scene.shape.StrokeLineCap.ROUND);
+        pane.getChildren().add(line);
+    }
+
     private static Pane baseIcon() {
         Pane pane = new Pane();
         pane.setPrefSize(30, 30);

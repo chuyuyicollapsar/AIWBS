@@ -13,6 +13,7 @@ public class Book implements Serializable {
     private String coverPath;
     private String summary;
     private final List<Volume> volumes = new ArrayList<>();
+    private List<OutlineNode> outlineRoots;
 
     public Book(String name) {
         this.name = name;
@@ -44,6 +45,13 @@ public class Book implements Serializable {
 
     public List<Volume> getVolumes() {
         return volumes;
+    }
+
+    public List<OutlineNode> getOutlineRoots() {
+        if (outlineRoots == null) {
+            outlineRoots = new ArrayList<>();
+        }
+        return outlineRoots;
     }
 
     @Override

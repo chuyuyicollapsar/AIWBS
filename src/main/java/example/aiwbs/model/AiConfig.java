@@ -7,9 +7,9 @@ public class AiConfig implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    private String baseUrl = "https://api.openai.com/v1";
+    private String baseUrl = "";
     private String apiKey = "";
-    private String modelId = "gpt-4.1-mini";
+    private String modelId = "";
 
     public String getBaseUrl() {
         return baseUrl;

@@ -4,6 +4,7 @@ import example.aiwbs.model.AppState;
 import example.aiwbs.model.Book;
 import example.aiwbs.model.Chapter;
 import example.aiwbs.model.ChapterVersion;
+import example.aiwbs.model.OutlineNode;
 import example.aiwbs.model.Volume;
 import example.aiwbs.storage.StateStore;
 import javafx.beans.property.BooleanProperty;
@@ -18,7 +19,11 @@ import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
+import javafx.scene.control.TreeCell;
+import javafx.scene.control.TreeItem;
+import javafx.scene.control.TreeView;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.WritableImage;
@@ -54,6 +59,10 @@ public class BookManagerView {
     private boolean historySidebarVisible;
     private double volumeSidebarWidth = 240;
     private double chapterSidebarWidth = 260;
+    private boolean outlineVisible;
+    private OutlineNode selectedOutlineNode;
+    private TreeView<OutlineNode> outlineTreeView;
+    private boolean settingOutlineSelection;
     private Consumer<Boolean> pageStateListener;
 
     public BookManagerView(AppState state, StateStore store) {
@@ -108,6 +117,17 @@ public class BookManagerView {
 
     public boolean isChapterSidebarCollapsed() {
         return chapterSidebarCollapsed;
+    }
+
+    public void toggleOutline() {
+        outlineVisible = !outlineVisible;
+        if (!inSelectionPage.get()) {
+            showWorkspace();
+        }
+    }
+
+    public boolean isOutlineVisible() {
+        return outlineVisible;
     }
 
     public void showBookMenu(Button anchor) {
@@ -246,8 +266,15 @@ public class BookManagerView {
         root.setStyle("-fx-background-color: #0f1730;");
         BorderPane page = new BorderPane();
         page.setPadding(new Insets(12));
-        page.setLeft(buildSidebars());
-        page.setCenter(buildWorkspaceCenter());
+        if (outlineVisible) {
+            HBox outlineWrapper = new HBox(buildOutlineSidebar());
+            outlineWrapper.setPadding(new Insets(0, 12, 0, 0));
+            page.setLeft(outlineWrapper);
+            page.setCenter(buildOutlineEditor());
+        } else {
+            page.setLeft(buildSidebars());
+            page.setCenter(buildWorkspaceCenter());
+        }
         root.setCenter(page);
     }
 
@@ -603,6 +630,231 @@ public class BookManagerView {
             store.save(state);
             showWorkspace();
         });
+    }
+
+    // ── Outline methods ──
+
+    private Parent buildOutlineSidebar() {
+        VBox box = sidebar("Outline", 260);
+        box.setStyle("-fx-background-color: rgba(255,255,255,0.07); -fx-background-radius: 12;");
+
+        Button add = fullButton("Add Root Node");
+        add.setOnAction(e -> addRootOutlineNode());
+        box.getChildren().add(add);
+
+        TreeItem<OutlineNode> rootItem = new TreeItem<>(null);
+        rootItem.setExpanded(true);
+        if (selectedBook != null) {
+            for (OutlineNode node : selectedBook.getOutlineRoots()) {
+                rootItem.getChildren().add(buildTreeItem(node));
+            }
+        }
+
+        TreeView<OutlineNode> treeView = new TreeView<>(rootItem);
+        treeView.setShowRoot(false);
+        treeView.setStyle("-fx-background-color: transparent; -fx-control-inner-background: transparent; -fx-background-radius: 8;");
+        outlineTreeView = treeView;
+
+        treeView.setCellFactory(tv -> new OutlineTreeCell());
+        treeView.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            if (!settingOutlineSelection && newVal != null && newVal.getValue() != null) {
+                selectedOutlineNode = newVal.getValue();
+                showWorkspace();
+            }
+        });
+
+        if (selectedOutlineNode != null) {
+            settingOutlineSelection = true;
+            selectTreeNode(treeView.getRoot(), selectedOutlineNode.getId());
+            settingOutlineSelection = false;
+        }
+
+        VBox.setVgrow(treeView, Priority.ALWAYS);
+        box.getChildren().add(treeView);
+        return box;
+    }
+
+    private TreeItem<OutlineNode> buildTreeItem(OutlineNode node) {
+        TreeItem<OutlineNode> item = new TreeItem<>(node);
+        item.setExpanded(true);
+        for (OutlineNode child : node.getChildren()) {
+            item.getChildren().add(buildTreeItem(child));
+        }
+        return item;
+    }
+
+    private void selectTreeNode(TreeItem<OutlineNode> parent, String id) {
+        for (TreeItem<OutlineNode> child : parent.getChildren()) {
+            if (child.getValue() != null && child.getValue().getId().equals(id)) {
+                outlineTreeView.getSelectionModel().select(child);
+                return;
+            }
+            selectTreeNode(child, id);
+        }
+    }
+
+    private class OutlineTreeCell extends TreeCell<OutlineNode> {
+        @Override
+        protected void updateItem(OutlineNode item, boolean empty) {
+            super.updateItem(item, empty);
+            if (empty || item == null) {
+                setText(null);
+                setContextMenu(null);
+                setStyle("");
+            } else {
+                setText(item.getTitle());
+                setPadding(new Insets(4, 8, 4, 8));
+                if (item == selectedOutlineNode) {
+                    setStyle("-fx-background-color: #d7bb74; -fx-text-fill: #11182d; -fx-background-radius: 6;");
+                } else {
+                    setStyle("-fx-background-color: transparent; -fx-text-fill: white;");
+                }
+                setContextMenu(buildOutlineNodeMenu(item));
+            }
+        }
+    }
+
+    private ContextMenu buildOutlineNodeMenu(OutlineNode node) {
+        MenuItem addChild = new MenuItem("Add Child");
+        addChild.setOnAction(e -> addChildOutlineNode(node));
+        MenuItem addSibling = new MenuItem("Add Sibling");
+        addSibling.setOnAction(e -> addSiblingOutlineNode(node));
+        MenuItem rename = new MenuItem("Rename");
+        rename.setOnAction(e -> renameOutlineNode(node));
+        MenuItem up = new MenuItem("Move Up");
+        up.setOnAction(e -> moveOutlineNode(node, -1));
+        MenuItem down = new MenuItem("Move Down");
+        down.setOnAction(e -> moveOutlineNode(node, 1));
+        MenuItem delete = new MenuItem("Delete");
+        delete.setOnAction(e -> deleteOutlineNode(node));
+        return new ContextMenu(addChild, addSibling, rename, up, down, delete);
+    }
+
+    private Parent buildOutlineEditor() {
+        VBox box = new VBox(12);
+        box.setPadding(new Insets(12));
+        box.setStyle("-fx-background-color: rgba(255,255,255,0.07); -fx-background-radius: 12;");
+
+        if (selectedOutlineNode == null) {
+            Label empty = new Label("Select an outline node to edit");
+            empty.setStyle("-fx-text-fill: rgba(255,255,255,0.65); -fx-font-size: 16px;");
+            box.getChildren().add(empty);
+            return box;
+        }
+
+        Label header = new Label("Outline Node");
+        header.setStyle("-fx-text-fill: rgba(255,255,255,0.78);");
+
+        TextField titleField = new TextField(selectedOutlineNode.getTitle());
+        titleField.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-background-color: #223154; -fx-text-fill: white; -fx-padding: 8;");
+
+        Label contentLabel = new Label("Content");
+        contentLabel.setStyle("-fx-text-fill: rgba(255,255,255,0.78);");
+
+        TextArea contentArea = new TextArea(selectedOutlineNode.getContent());
+        contentArea.setWrapText(true);
+        contentArea.setStyle("-fx-font-size: 14px; -fx-background-color: #223154; -fx-text-fill: white;");
+        VBox.setVgrow(contentArea, Priority.ALWAYS);
+
+        Button save = new Button("Save");
+        save.getStyleClass().add("primary-action");
+        save.setOnAction(e -> {
+            selectedOutlineNode.setTitle(titleField.getText());
+            selectedOutlineNode.setContent(contentArea.getText());
+            store.save(state);
+            showWorkspace();
+        });
+
+        box.getChildren().addAll(header, titleField, contentLabel, contentArea, save);
+        return box;
+    }
+
+    private void addRootOutlineNode() {
+        if (selectedBook == null) return;
+        prompt("Outline Node Title", "New Outline Node").ifPresent(name -> {
+            OutlineNode node = new OutlineNode(name);
+            selectedBook.getOutlineRoots().add(node);
+            selectedOutlineNode = node;
+            store.save(state);
+            showWorkspace();
+        });
+    }
+
+    private void addChildOutlineNode(OutlineNode parent) {
+        prompt("Outline Node Title", "New Outline Node").ifPresent(name -> {
+            OutlineNode node = new OutlineNode(name);
+            parent.getChildren().add(node);
+            selectedOutlineNode = node;
+            store.save(state);
+            showWorkspace();
+        });
+    }
+
+    private void addSiblingOutlineNode(OutlineNode node) {
+        prompt("Outline Node Title", "New Outline Node").ifPresent(name -> {
+            OutlineNode newNode = new OutlineNode(name);
+            OutlineNode parent = findOutlineParent(selectedBook.getOutlineRoots(), node.getId());
+            if (parent != null) {
+                int index = findChildIndex(parent.getChildren(), node.getId());
+                parent.getChildren().add(index + 1, newNode);
+            } else {
+                int index = findChildIndex(selectedBook.getOutlineRoots(), node.getId());
+                selectedBook.getOutlineRoots().add(index + 1, newNode);
+            }
+            selectedOutlineNode = newNode;
+            store.save(state);
+            showWorkspace();
+        });
+    }
+
+    private void renameOutlineNode(OutlineNode node) {
+        prompt("Rename", node.getTitle()).ifPresent(name -> {
+            node.setTitle(name);
+            store.save(state);
+            showWorkspace();
+        });
+    }
+
+    private void deleteOutlineNode(OutlineNode node) {
+        OutlineNode parent = findOutlineParent(selectedBook.getOutlineRoots(), node.getId());
+        if (parent != null) {
+            parent.getChildren().remove(node);
+        } else {
+            selectedBook.getOutlineRoots().remove(node);
+        }
+        selectedOutlineNode = null;
+        store.save(state);
+        showWorkspace();
+    }
+
+    private void moveOutlineNode(OutlineNode node, int offset) {
+        OutlineNode parent = findOutlineParent(selectedBook.getOutlineRoots(), node.getId());
+        List<OutlineNode> siblings = parent != null ? parent.getChildren() : selectedBook.getOutlineRoots();
+        int index = findChildIndex(siblings, node.getId());
+        int target = index + offset;
+        if (index < 0 || target < 0 || target >= siblings.size()) return;
+        siblings.remove(index);
+        siblings.add(target, node);
+        store.save(state);
+        showWorkspace();
+    }
+
+    private OutlineNode findOutlineParent(List<OutlineNode> roots, String childId) {
+        for (OutlineNode n : roots) {
+            if (n.getChildren().stream().anyMatch(c -> c.getId().equals(childId))) {
+                return n;
+            }
+            OutlineNode found = findOutlineParent(n.getChildren(), childId);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private int findChildIndex(List<OutlineNode> list, String childId) {
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i).getId().equals(childId)) return i;
+        }
+        return -1;
     }
 
     private Optional<String> prompt(String title, String initialValue) {
