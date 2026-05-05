@@ -11,6 +11,7 @@ public class Chapter implements Serializable {
 
     private String title;
     private String content;
+    private String outlineContent;
     private final List<ChapterVersion> versions = new ArrayList<>();
 
     public Chapter(String title, String content) {
@@ -32,6 +33,14 @@ public class Chapter implements Serializable {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public String getOutlineContent() {
+        return outlineContent != null ? outlineContent : "";
+    }
+
+    public void setOutlineContent(String outlineContent) {
+        this.outlineContent = outlineContent;
     }
 
     public List<ChapterVersion> getVersions() {

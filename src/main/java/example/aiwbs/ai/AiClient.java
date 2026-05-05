@@ -14,7 +14,26 @@ public class AiClient {
             .build();
 
     public String testConnection(AiConfig config) throws Exception {
-        validate(config);
+        String apiKey = config.effectiveApiKey();
+        String modelId = config.effectiveModelId();
+
+        if (config.isUseOfficialApi()) {
+            return switch (config.resolveOfficialProvider()) {
+                case ANTHROPIC -> testAnthropic(apiKey, modelId);
+                case GEMINI -> testGemini(apiKey, modelId);
+                default -> testOpenAiCompatible(config.effectiveBaseUrl(), apiKey, modelId);
+            };
+        }
+        return testOpenAiCompatible(config.effectiveBaseUrl(), apiKey, modelId);
+    }
+
+    // ── OpenAI-compatible (OpenAI official + third-party) ──
+
+    private String testOpenAiCompatible(String baseUrl, String apiKey, String modelId) throws Exception {
+        validateNotBlank(baseUrl, "Base URL");
+        validateNotBlank(apiKey, "API Key");
+        validateNotBlank(modelId, "Model ID");
+
         String body = """
                 {
                   "model": "%s",
@@ -24,13 +43,13 @@ public class AiClient {
                   ],
                   "temperature": 0.2
                 }
-                """.formatted(escapeJson(config.getModelId()));
+                """.formatted(escapeJson(modelId));
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(chatCompletionsUrl(config.getBaseUrl())))
+                .uri(URI.create(chatCompletionsUrl(baseUrl)))
                 .timeout(Duration.ofSeconds(60))
                 .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer " + config.getApiKey())
+                .header("Authorization", "Bearer " + apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
 
@@ -38,46 +57,116 @@ public class AiClient {
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             throw new IllegalStateException("HTTP " + response.statusCode() + ": " + trim(response.body()));
         }
-        return trim(extractFirstContent(response.body()));
+        return trim(extractOpenAiContent(response.body()));
     }
 
-    private void validate(AiConfig config) {
-        if (isBlank(config.getBaseUrl())) {
-            throw new IllegalArgumentException("Base URL is required.");
+    // ── Anthropic ──
+
+    private String testAnthropic(String apiKey, String modelId) throws Exception {
+        validateNotBlank(apiKey, "API Key");
+        if (isBlank(modelId)) modelId = "claude-sonnet-4-20250514";
+
+        String body = """
+                {
+                  "model": "%s",
+                  "max_tokens": 256,
+                  "system": "You are a writing assistant.",
+                  "messages": [
+                    {"role": "user", "content": "Reply with exactly: OK"}
+                  ]
+                }
+                """.formatted(escapeJson(modelId));
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://api.anthropic.com/v1/messages"))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "application/json")
+                .header("x-api-key", apiKey)
+                .header("anthropic-version", "2023-06-01")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new IllegalStateException("HTTP " + response.statusCode() + ": " + trim(response.body()));
         }
-        if (isBlank(config.getApiKey())) {
-            throw new IllegalArgumentException("API Key is required.");
-        }
-        if (isBlank(config.getModelId())) {
-            throw new IllegalArgumentException("Model ID is required.");
-        }
+        return trim(extractAnthropicContent(response.body()));
     }
 
-    private String chatCompletionsUrl(String baseUrl) {
-        String normalized = baseUrl.trim();
-        while (normalized.endsWith("/")) {
-            normalized = normalized.substring(0, normalized.length() - 1);
+    // ── Gemini ──
+
+    private String testGemini(String apiKey, String modelId) throws Exception {
+        validateNotBlank(apiKey, "API Key");
+        if (isBlank(modelId)) modelId = "gemini-2.0-flash";
+
+        String body = """
+                {
+                  "contents": [
+                    {
+                      "parts": [
+                        {"text": "Reply with exactly: OK"}
+                      ]
+                    }
+                  ],
+                  "systemInstruction": {
+                    "parts": [{"text": "You are a writing assistant."}]
+                  }
+                }
+                """;
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://generativelanguage.googleapis.com/v1/models/"
+                        + escapeJson(modelId) + ":generateContent?key=" + escapeJson(apiKey)))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new IllegalStateException("HTTP " + response.statusCode() + ": " + trim(response.body()));
         }
-        if (normalized.endsWith("/chat/completions")) {
-            return normalized;
-        }
-        return normalized + "/chat/completions";
+        return trim(extractGeminiContent(response.body()));
     }
 
-    private String extractFirstContent(String json) {
+    // ── Response extractors ──
+
+    private String extractOpenAiContent(String json) {
         String marker = "\"content\"";
         int markerIndex = json.indexOf(marker);
-        if (markerIndex < 0) {
-            return json;
-        }
+        if (markerIndex < 0) return json;
         int colon = json.indexOf(':', markerIndex + marker.length());
         int quote = json.indexOf('"', colon + 1);
-        if (colon < 0 || quote < 0) {
-            return json;
-        }
+        if (colon < 0 || quote < 0) return json;
+        return extractRawString(json, quote + 1);
+    }
+
+    private String extractAnthropicContent(String json) {
+        // Anthropic: {"content":[{"type":"text","text":"OK"}]}
+        String marker = "\"text\"";
+        int markerIndex = json.indexOf(marker);
+        if (markerIndex < 0) return json;
+        int colon = json.indexOf(':', markerIndex + marker.length());
+        int quote = json.indexOf('"', colon + 1);
+        if (colon < 0 || quote < 0) return json;
+        return extractRawString(json, quote + 1);
+    }
+
+    private String extractGeminiContent(String json) {
+        // Gemini: {"candidates":[{"content":{"parts":[{"text":"OK"}]}}]}
+        String marker = "\"text\"";
+        int markerIndex = json.indexOf(marker);
+        if (markerIndex < 0) return json;
+        int colon = json.indexOf(':', markerIndex + marker.length());
+        int quote = json.indexOf('"', colon + 1);
+        if (colon < 0 || quote < 0) return json;
+        return extractRawString(json, quote + 1);
+    }
+
+    private String extractRawString(String json, int start) {
         StringBuilder value = new StringBuilder();
         boolean escaping = false;
-        for (int i = quote + 1; i < json.length(); i++) {
+        for (int i = start; i < json.length(); i++) {
             char c = json.charAt(i);
             if (escaping) {
                 value.append(switch (c) {
@@ -100,8 +189,27 @@ public class AiClient {
         return json;
     }
 
+    // ── Helpers ──
+
+    private String chatCompletionsUrl(String baseUrl) {
+        String normalized = baseUrl.trim();
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        if (normalized.endsWith("/chat/completions")) {
+            return normalized;
+        }
+        return normalized + "/chat/completions";
+    }
+
     private String escapeJson(String value) {
         return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private void validateNotBlank(String value, String fieldName) {
+        if (isBlank(value)) {
+            throw new IllegalArgumentException(fieldName + " is required.");
+        }
     }
 
     private boolean isBlank(String value) {
@@ -109,9 +217,7 @@ public class AiClient {
     }
 
     private String trim(String value) {
-        if (value == null) {
-            return "";
-        }
+        if (value == null) return "";
         return value.length() > 600 ? value.substring(0, 600) + "..." : value;
     }
 }

@@ -10,6 +10,7 @@ public class Volume implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private String name;
+    private String outlineContent;
     private final List<Chapter> chapters = new ArrayList<>();
 
     public Volume(String name) {
@@ -22,6 +23,14 @@ public class Volume implements Serializable {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getOutlineContent() {
+        return outlineContent != null ? outlineContent : "";
+    }
+
+    public void setOutlineContent(String outlineContent) {
+        this.outlineContent = outlineContent;
     }
 
     public List<Chapter> getChapters() {

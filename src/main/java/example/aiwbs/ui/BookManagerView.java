@@ -54,12 +54,15 @@ public class BookManagerView {
     private Volume selectedVolume;
     private Chapter selectedChapter;
     private int selectedBookIndex;
-    private boolean volumeSidebarCollapsed;
+    private ContextMenu displayedMenu;
+    private boolean volumeSidebarCollapsed = true;
     private boolean chapterSidebarCollapsed;
     private boolean historySidebarVisible;
     private double volumeSidebarWidth = 240;
     private double chapterSidebarWidth = 260;
     private boolean outlineVisible;
+    private boolean volChapOutlineMode;
+    private boolean outlineSidebarCollapsed;
     private OutlineNode selectedOutlineNode;
     private TreeView<OutlineNode> outlineTreeView;
     private boolean settingOutlineSelection;
@@ -126,8 +129,42 @@ public class BookManagerView {
         }
     }
 
+    public void setOutlineMode(boolean isVolChap) {
+        outlineVisible = true;
+        volChapOutlineMode = isVolChap;
+        if (!inSelectionPage.get()) {
+            showWorkspace();
+        }
+    }
+
+    public void exitOutline() {
+        outlineVisible = false;
+        if (!inSelectionPage.get()) {
+            showWorkspace();
+        }
+    }
+
     public boolean isOutlineVisible() {
         return outlineVisible;
+    }
+
+    public boolean isVolChapOutlineMode() {
+        return volChapOutlineMode;
+    }
+
+    public void toggleOutlineSidebar() {
+        outlineSidebarCollapsed = !outlineSidebarCollapsed;
+        if (!inSelectionPage.get()) {
+            showWorkspace();
+        }
+    }
+
+    public boolean isOutlineSidebarCollapsed() {
+        return outlineSidebarCollapsed;
+    }
+
+    public boolean hasSelection() {
+        return selectedBook != null;
     }
 
     public void showBookMenu(Button anchor) {
@@ -267,10 +304,19 @@ public class BookManagerView {
         BorderPane page = new BorderPane();
         page.setPadding(new Insets(12));
         if (outlineVisible) {
-            HBox outlineWrapper = new HBox(buildOutlineSidebar());
-            outlineWrapper.setPadding(new Insets(0, 12, 0, 0));
-            page.setLeft(outlineWrapper);
-            page.setCenter(buildOutlineEditor());
+            if (volChapOutlineMode) {
+                BorderPane right = new BorderPane();
+                right.setLeft(buildSidebars());
+                right.setCenter(buildVolChapOutlineEditor());
+                page.setCenter(right);
+            } else {
+                if (!outlineSidebarCollapsed) {
+                    HBox outlineWrapper = new HBox(buildOutlineSidebar());
+                    outlineWrapper.setPadding(new Insets(0, 12, 0, 0));
+                    page.setLeft(outlineWrapper);
+                }
+                page.setCenter(buildOutlineEditor());
+            }
         } else {
             page.setLeft(buildSidebars());
             page.setCenter(buildWorkspaceCenter());
@@ -391,7 +437,14 @@ public class BookManagerView {
         HBox.setHgrow(select, Priority.ALWAYS);
         select.setOnAction(e -> selectAction.run());
         Button more = new Button("...");
-        more.setOnAction(e -> menuAction.accept(more));
+        more.setOnAction(e -> {
+            if (displayedMenu != null && displayedMenu.isShowing()) {
+                displayedMenu.hide();
+                displayedMenu = null;
+                return;
+            }
+            menuAction.accept(more);
+        });
         row.getChildren().addAll(select, more);
         return row;
     }
@@ -402,10 +455,21 @@ public class BookManagerView {
         box.setStyle("-fx-background-color: rgba(255,255,255,0.07); -fx-background-radius: 12;");
 
         Label volume = new Label(selectedVolume == null ? "No volume selected" : selectedVolume.getName());
-        Label chapter = new Label(selectedChapter == null ? "No chapter selected" : selectedChapter.getTitle() + " | " + wordCount(selectedChapter.getContent()) + " words");
+        volume.setStyle("-fx-text-fill: rgba(255,255,255,0.78);");
+
+        if (selectedChapter == null) {
+            Label hint = new Label("该分卷没有任何章节");
+            hint.setStyle("-fx-text-fill: rgba(255,255,255,0.40); -fx-font-size: 18px;");
+            VBox center = new VBox(hint);
+            center.setAlignment(Pos.CENTER);
+            VBox.setVgrow(center, Priority.ALWAYS);
+            box.getChildren().addAll(volume, center);
+            return box;
+        }
+
+        Label chapter = new Label(selectedChapter.getTitle() + " | " + wordCount(selectedChapter.getContent()) + " words");
         chapter.setWrapText(true);
         chapter.setMaxWidth(Double.MAX_VALUE);
-        volume.setStyle("-fx-text-fill: rgba(255,255,255,0.78);");
         chapter.setStyle("-fx-text-fill: white; -fx-font-size: 22px; -fx-font-weight: bold;");
 
         editor = new TextArea();
@@ -514,6 +578,15 @@ public class BookManagerView {
     }
 
     private void showVolumeMenu(Volume volume, Button anchor) {
+        ContextMenu menu = buildVolumeMenu(volume);
+        displayedMenu = menu;
+        menu.setOnHidden(e -> {
+            if (displayedMenu == menu) displayedMenu = null;
+        });
+        menu.show(anchor, javafx.geometry.Side.BOTTOM, 0, 0);
+    }
+
+    private ContextMenu buildVolumeMenu(Volume volume) {
         ContextMenu menu = new ContextMenu();
         MenuItem rename = new MenuItem("Rename Volume");
         rename.setOnAction(e -> renameVolume(volume));
@@ -530,10 +603,19 @@ public class BookManagerView {
             showWorkspace();
         });
         menu.getItems().addAll(rename, up, down, delete);
-        menu.show(anchor, javafx.geometry.Side.BOTTOM, 0, 0);
+        return menu;
     }
 
     private void showChapterMenu(Chapter chapter, Button anchor) {
+        ContextMenu menu = buildChapterMenu(chapter);
+        displayedMenu = menu;
+        menu.setOnHidden(e -> {
+            if (displayedMenu == menu) displayedMenu = null;
+        });
+        menu.show(anchor, javafx.geometry.Side.BOTTOM, 0, 0);
+    }
+
+    private ContextMenu buildChapterMenu(Chapter chapter) {
         ContextMenu menu = new ContextMenu();
         MenuItem rename = new MenuItem("Rename Chapter");
         rename.setOnAction(e -> renameChapter(chapter));
@@ -549,7 +631,7 @@ public class BookManagerView {
             showWorkspace();
         });
         menu.getItems().addAll(rename, up, down, delete);
-        menu.show(anchor, javafx.geometry.Side.BOTTOM, 0, 0);
+        return menu;
     }
 
     private void moveVolume(Volume volume, int offset) {
@@ -575,7 +657,7 @@ public class BookManagerView {
         showWorkspace();
     }
 
-    private void renameBook() {
+    public void renameBook() {
         prompt("Book Name", selectedBook.getName()).ifPresent(name -> {
             selectedBook.setName(blankAsDefault(name, "Untitled Book"));
             store.save(state);
@@ -593,7 +675,7 @@ public class BookManagerView {
         });
     }
 
-    private void chooseCover() {
+    public void chooseCover() {
         FileChooser chooser = new FileChooser();
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Image Files", "*.png", "*.jpg", "*.jpeg", "*.webp"));
         File file = chooser.showOpenDialog(root.getScene().getWindow());
@@ -635,42 +717,55 @@ public class BookManagerView {
     // ── Outline methods ──
 
     private Parent buildOutlineSidebar() {
-        VBox box = sidebar("Outline", 260);
+        VBox box = new VBox(8);
+        box.setPrefWidth(260);
+        box.setPadding(new Insets(12));
         box.setStyle("-fx-background-color: rgba(255,255,255,0.07); -fx-background-radius: 12;");
 
-        Button add = fullButton("Add Root Node");
-        add.setOnAction(e -> addRootOutlineNode());
-        box.getChildren().add(add);
+        Label title = new Label("Outline");
+        title.setStyle("-fx-text-fill: white; -fx-font-size: 15px; -fx-font-weight: bold;");
+        box.getChildren().add(title);
 
-        TreeItem<OutlineNode> rootItem = new TreeItem<>(null);
-        rootItem.setExpanded(true);
-        if (selectedBook != null) {
-            for (OutlineNode node : selectedBook.getOutlineRoots()) {
-                rootItem.getChildren().add(buildTreeItem(node));
+        if (volChapOutlineMode) {
+            Label hint = new Label("请使用右侧分卷和章节\n侧边栏选择要编辑的内容");
+            hint.setWrapText(true);
+            hint.setStyle("-fx-text-fill: rgba(255,255,255,0.50); -fx-font-size: 13px;");
+            box.getChildren().add(hint);
+        } else {
+            Button add = fullButton("Add Root Node");
+            add.setOnAction(e -> addRootOutlineNode());
+            box.getChildren().add(add);
+
+            TreeItem<OutlineNode> rootItem = new TreeItem<>(null);
+            rootItem.setExpanded(true);
+            if (selectedBook != null) {
+                for (OutlineNode node : selectedBook.getOutlineRoots()) {
+                    rootItem.getChildren().add(buildTreeItem(node));
+                }
             }
-        }
 
-        TreeView<OutlineNode> treeView = new TreeView<>(rootItem);
-        treeView.setShowRoot(false);
-        treeView.setStyle("-fx-background-color: transparent; -fx-control-inner-background: transparent; -fx-background-radius: 8;");
-        outlineTreeView = treeView;
+            TreeView<OutlineNode> treeView = new TreeView<>(rootItem);
+            treeView.setShowRoot(false);
+            treeView.setStyle("-fx-background-color: transparent; -fx-control-inner-background: transparent; -fx-background-radius: 8;");
+            outlineTreeView = treeView;
 
-        treeView.setCellFactory(tv -> new OutlineTreeCell());
-        treeView.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
-            if (!settingOutlineSelection && newVal != null && newVal.getValue() != null) {
-                selectedOutlineNode = newVal.getValue();
-                showWorkspace();
+            treeView.setCellFactory(tv -> new OutlineTreeCell());
+            treeView.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+                if (!settingOutlineSelection && newVal != null && newVal.getValue() != null) {
+                    selectedOutlineNode = newVal.getValue();
+                    showWorkspace();
+                }
+            });
+
+            if (selectedOutlineNode != null) {
+                settingOutlineSelection = true;
+                selectTreeNode(treeView.getRoot(), selectedOutlineNode.getId());
+                settingOutlineSelection = false;
             }
-        });
 
-        if (selectedOutlineNode != null) {
-            settingOutlineSelection = true;
-            selectTreeNode(treeView.getRoot(), selectedOutlineNode.getId());
-            settingOutlineSelection = false;
+            VBox.setVgrow(treeView, Priority.ALWAYS);
+            box.getChildren().add(treeView);
         }
-
-        VBox.setVgrow(treeView, Priority.ALWAYS);
-        box.getChildren().add(treeView);
         return box;
     }
 
@@ -766,6 +861,67 @@ public class BookManagerView {
         });
 
         box.getChildren().addAll(header, titleField, contentLabel, contentArea, save);
+        return box;
+    }
+
+    // ════════════════════════════════════════
+    //  Vol/Chapter outline editor
+    // ════════════════════════════════════════
+
+    private Parent buildVolChapOutlineEditor() {
+        boolean chapterOpen = selectedChapter != null && !chapterSidebarCollapsed;
+        boolean volumeOpen = selectedVolume != null && !volumeSidebarCollapsed;
+        boolean editorValid = false;
+
+        if (chapterOpen) {
+            // Chapter outline (chapter sidebar open, or both open)
+            editorValid = true;
+        } else if (volumeOpen) {
+            // Volume outline (only volume sidebar open)
+            editorValid = true;
+        }
+
+        if (!editorValid) {
+            VBox empty = new VBox();
+            empty.setAlignment(Pos.CENTER);
+            Label msg = new Label("请选择分卷或章节");
+            msg.setStyle("-fx-text-fill: rgba(255,255,255,0.50); -fx-font-size: 16px;");
+            empty.getChildren().add(msg);
+            return empty;
+        }
+
+        VBox box = new VBox(12);
+        box.setPadding(new Insets(12));
+        box.setStyle("-fx-background-color: rgba(255,255,255,0.07); -fx-background-radius: 12;");
+
+        boolean isChapter = chapterOpen;
+        String labelText = isChapter
+                ? selectedChapter.getTitle() + " — 章节细纲"
+                : selectedVolume.getName() + " — 分卷细纲";
+        Label header = new Label(labelText);
+        header.setWrapText(true);
+        header.setStyle("-fx-text-fill: white; -fx-font-size: 18px; -fx-font-weight: bold;");
+
+        String content = isChapter ? selectedChapter.getOutlineContent() : selectedVolume.getOutlineContent();
+        TextArea editor = new TextArea(content);
+        editor.setWrapText(true);
+        editor.setStyle("-fx-font-size: 14px; -fx-background-color: #223154; -fx-text-fill: white; -fx-control-inner-background: #223154;");
+        VBox.setVgrow(editor, Priority.ALWAYS);
+
+        Button save = new Button("Save");
+        save.getStyleClass().add("primary-action");
+        save.setOnAction(e -> {
+            String text = editor.getText();
+            if (isChapter) {
+                selectedChapter.setOutlineContent(text);
+            } else {
+                selectedVolume.setOutlineContent(text);
+            }
+            store.save(state);
+            header.setText(labelText + "  (saved)");
+        });
+
+        box.getChildren().addAll(header, editor, save);
         return box;
     }
 

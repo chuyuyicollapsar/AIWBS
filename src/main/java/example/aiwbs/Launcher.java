@@ -2,6 +2,7 @@ package example.aiwbs;
 
 public final class Launcher {
 
+
     private Launcher() {
     }
 
