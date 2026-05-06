@@ -24,6 +24,7 @@ import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.TreeCell;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.WritableImage;
@@ -165,6 +166,10 @@ public class BookManagerView {
 
     public boolean hasSelection() {
         return selectedBook != null;
+    }
+
+    public Book getSelectedBook() {
+        return selectedBook;
     }
 
     public void showBookMenu(Button anchor) {
@@ -367,11 +372,21 @@ public class BookManagerView {
         Button add = fullButton("Add Volume");
         add.setOnAction(e -> addVolume());
         box.getChildren().add(add);
+
+        VBox list = new VBox(6);
         if (selectedBook != null) {
             for (Volume volume : selectedBook.getVolumes()) {
-                box.getChildren().add(row(volume.getName(), selectedVolume == volume, () -> selectVolume(volume), anchor -> showVolumeMenu(volume, anchor)));
+                list.getChildren().add(row(volume.getName(), selectedVolume == volume,
+                        () -> selectVolume(volume), anchor -> showVolumeMenu(volume, anchor)));
             }
         }
+
+        ScrollPane scroll = new ScrollPane(list);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setStyle("-fx-background: transparent; -fx-background-color: transparent; -fx-border-color: transparent;");
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        box.getChildren().add(scroll);
         return box;
     }
 
@@ -380,11 +395,21 @@ public class BookManagerView {
         Button add = fullButton("Add Chapter");
         add.setOnAction(e -> addChapter());
         box.getChildren().add(add);
+
+        VBox list = new VBox(6);
         if (selectedVolume != null) {
             for (Chapter chapter : selectedVolume.getChapters()) {
-                box.getChildren().add(row(chapter.getTitle(), selectedChapter == chapter, () -> selectChapter(chapter), anchor -> showChapterMenu(chapter, anchor)));
+                list.getChildren().add(row(chapter.getTitle(), selectedChapter == chapter,
+                        () -> selectChapter(chapter), anchor -> showChapterMenu(chapter, anchor)));
             }
         }
+
+        ScrollPane scroll = new ScrollPane(list);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setStyle("-fx-background: transparent; -fx-background-color: transparent; -fx-border-color: transparent;");
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        box.getChildren().add(scroll);
         return box;
     }
 

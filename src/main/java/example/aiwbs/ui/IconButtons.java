@@ -232,4 +232,102 @@ public final class IconButtons {
         }
         return wrap(i);
     }
+
+    // ── AI entry (top toolbar) ──
+
+    public static Button aiEntryButton() {
+        Pane i = bg();
+        Rectangle b = new Rectangle(5, 8, 20, 16);
+        b.setArcWidth(6); b.setArcHeight(6);
+        b.setFill(Color.TRANSPARENT); b.setStroke(B); b.setStrokeWidth(2.2);
+        Path t = new Path(new MoveTo(19, 24), new LineTo(23, 28), new LineTo(25, 24));
+        t.setFill(Color.TRANSPARENT); t.setStroke(B); t.setStrokeWidth(2.2);
+        t.setStrokeLineJoin(javafx.scene.shape.StrokeLineJoin.ROUND);
+        Line a1 = ln(9, 14, 16, 14, B);
+        Line a2 = ln(9, 19, 21, 19, B);
+        i.getChildren().addAll(b, t, a1, a2);
+        return wrap(i);
+    }
+
+    public static Button aiEntryActiveButton() {
+        Pane i = bg();
+        Rectangle b = new Rectangle(5, 8, 20, 16);
+        b.setArcWidth(6); b.setArcHeight(6);
+        b.setFill(Color.TRANSPARENT); b.setStroke(G); b.setStrokeWidth(2.2);
+        Path t = new Path(new MoveTo(19, 24), new LineTo(23, 28), new LineTo(25, 24));
+        t.setFill(Color.TRANSPARENT); t.setStroke(G); t.setStrokeWidth(2.2);
+        t.setStrokeLineJoin(javafx.scene.shape.StrokeLineJoin.ROUND);
+        Line a1 = ln(9, 14, 16, 14, G);
+        Line a2 = ln(9, 19, 21, 19, G);
+        i.getChildren().addAll(b, t, a1, a2);
+        return wrap(i);
+    }
+
+    // ── Session list toggle ──
+
+    public static Button sessionToggleButton() {
+        Pane i = bg();
+        Rectangle b1 = new Rectangle(4, 5, 12, 10);
+        b1.setArcWidth(4); b1.setArcHeight(4);
+        b1.setFill(Color.TRANSPARENT); b1.setStroke(B); b1.setStrokeWidth(2.0);
+        Rectangle b2 = new Rectangle(12, 12, 12, 10);
+        b2.setArcWidth(4); b2.setArcHeight(4);
+        b2.setFill(Color.TRANSPARENT); b2.setStroke(B); b2.setStrokeWidth(2.0);
+        i.getChildren().addAll(b1, b2);
+        for (int x : new int[]{8, 12}) {
+            Circle d = new Circle(x, 10, 1.2);
+            d.setFill(B);
+            i.getChildren().add(d);
+        }
+        return wrap(i);
+    }
+
+    public static Button sessionToggleActiveButton() {
+        Pane i = bg();
+        Rectangle b1 = new Rectangle(4, 5, 12, 10);
+        b1.setArcWidth(4); b1.setArcHeight(4);
+        b1.setFill(Color.TRANSPARENT); b1.setStroke(G); b1.setStrokeWidth(2.0);
+        Rectangle b2 = new Rectangle(12, 12, 12, 10);
+        b2.setArcWidth(4); b2.setArcHeight(4);
+        b2.setFill(Color.TRANSPARENT); b2.setStroke(G); b2.setStrokeWidth(2.0);
+        i.getChildren().addAll(b1, b2);
+        for (int x : new int[]{8, 12}) {
+            Circle d = new Circle(x, 10, 1.2);
+            d.setFill(G);
+            i.getChildren().add(d);
+        }
+        return wrap(i);
+    }
+
+    // ── Nav tree toggle ──
+
+    public static Button navTreeToggleButton() {
+        Pane i = bg();
+        Rectangle f = new Rectangle(4, 4, 22, 22);
+        f.setArcWidth(6); f.setArcHeight(6);
+        f.setFill(Color.TRANSPARENT); f.setStroke(B); f.setStrokeWidth(2.0);
+        i.getChildren().add(f);
+        for (int y : new int[]{10, 16, 22}) {
+            Circle d = new Circle(10, y, 1.8);
+            d.setFill(B);
+            i.getChildren().add(d);
+            i.getChildren().add(ln(13, y, 20, y, B));
+        }
+        return wrap(i);
+    }
+
+    public static Button navTreeToggleActiveButton() {
+        Pane i = bg();
+        Rectangle f = new Rectangle(4, 4, 22, 22);
+        f.setArcWidth(6); f.setArcHeight(6);
+        f.setFill(Color.TRANSPARENT); f.setStroke(G); f.setStrokeWidth(2.0);
+        i.getChildren().add(f);
+        for (int y : new int[]{10, 16, 22}) {
+            Circle d = new Circle(10, y, 1.8);
+            d.setFill(G);
+            i.getChildren().add(d);
+            i.getChildren().add(ln(13, y, 20, y, G));
+        }
+        return wrap(i);
+    }
 }

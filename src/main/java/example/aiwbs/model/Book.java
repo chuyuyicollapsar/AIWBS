@@ -4,11 +4,13 @@ import java.io.Serial;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public class Book implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
+    private String id;
     private String name;
     private String coverPath;
     private String summary;
@@ -16,7 +18,12 @@ public class Book implements Serializable {
     private List<OutlineNode> outlineRoots;
 
     public Book(String name) {
+        this.id = UUID.randomUUID().toString();
         this.name = name;
+    }
+
+    public String getId() {
+        return id;
     }
 
     public String getName() {

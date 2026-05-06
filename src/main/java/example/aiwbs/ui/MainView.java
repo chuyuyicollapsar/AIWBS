@@ -1,6 +1,7 @@
 package example.aiwbs.ui;
 
 import example.aiwbs.model.AppState;
+import example.aiwbs.model.Book;
 import example.aiwbs.storage.StateStore;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -18,6 +19,7 @@ public class MainView {
     private final AppState state;
     private final StateStore store;
     private boolean inSettingsMode;
+    private boolean inAiMode;
 
     // Toolbar sections
     private HBox toolbarCenter;
@@ -28,12 +30,19 @@ public class MainView {
     private Button forwardBtn;
     private Button outlineTreeBtn;
     private Button volChapOutlineBtn;
+    private Button aiEntryBtn;
 
     // Left bar
     private final VBox leftBar = new VBox(6);
     private Button volToggleBtn;
     private Button chapToggleBtn;
     private Button outlineSidebarToggleBtn;
+
+    // AI conversation view
+    private AiConversationView aiConversationView;
+
+    // Stored original left bar buttons for restoration
+    private Button aiBtn;
 
     public MainView(AppState state, StateStore store) {
         this.state = state;
@@ -69,6 +78,8 @@ public class MainView {
         backBtn.setOnAction(e -> {
             if (inSettingsMode) {
                 exitSettings();
+            } else if (inAiMode) {
+                exitAiMode();
             } else if (!bookManagerView.inSelectionPageProperty().get()) {
                 bookManagerView.showSelectionPage();
             }
@@ -119,7 +130,17 @@ public class MainView {
             refreshToolbarState();
         });
 
-        toolbarCenter.getChildren().addAll(outlineTreeBtn, volChapOutlineBtn);
+        aiEntryBtn = IconButtons.aiEntryButton();
+        tip(aiEntryBtn, "AI对话", "bottom");
+        aiEntryBtn.setOnAction(e -> {
+            if (inAiMode) {
+                exitAiMode();
+            } else {
+                enterAiMode();
+            }
+        });
+
+        toolbarCenter.getChildren().addAll(outlineTreeBtn, volChapOutlineBtn, aiEntryBtn);
         toolbarCenter.setMaxWidth(Region.USE_PREF_SIZE);
 
         // ── Right group (anchored right) ──
@@ -140,6 +161,7 @@ public class MainView {
         bar.getChildren().addAll(left, toolbarCenter, toolbarRight);
 
         buildLeftBar();
+        refreshLeftBar();
         refreshToolbarState();
         return bar;
     }
@@ -179,11 +201,10 @@ public class MainView {
         });
         outlineSidebarToggleBtn = outlineBtn;
 
-        Button aiBtn = IconButtons.aiButton();
-        tip(aiBtn, "AI助手", "right");
+        this.aiBtn = IconButtons.aiButton();
+        tip(this.aiBtn, "AI助手", "right");
 
-        leftBar.getChildren().addAll(volBtn, chapBtn, outlineBtn, aiBtn);
-        refreshLeftBar();
+        leftBar.getChildren().addAll(volBtn, chapBtn, outlineBtn, this.aiBtn);
     }
 
     // ════════════════════════════════════════
@@ -199,6 +220,29 @@ public class MainView {
 
     private void exitSettings() {
         inSettingsMode = false;
+        if (inAiMode) {
+            root.setCenter(aiConversationView.getRoot());
+        } else {
+            root.setCenter(bookManagerView.getRoot());
+        }
+        refreshToolbarState();
+    }
+
+    // ════════════════════════════════════════
+    //  AI mode
+    // ════════════════════════════════════════
+
+    private void enterAiMode() {
+        inAiMode = true;
+        aiConversationView = new AiConversationView(state, store, bookManagerView.getSelectedBook());
+        aiConversationView.setOnPanelToggle(this::refreshToolbarState);
+        root.setCenter(aiConversationView.getRoot());
+        refreshToolbarState();
+    }
+
+    private void exitAiMode() {
+        inAiMode = false;
+        aiConversationView = null;
         root.setCenter(bookManagerView.getRoot());
         refreshToolbarState();
     }
@@ -209,19 +253,49 @@ public class MainView {
 
     private void refreshToolbarState() {
         boolean inSelectionPage = bookManagerView.inSelectionPageProperty().get();
-        boolean inWorkspace = !inSelectionPage && !inSettingsMode;
+        boolean inWorkspace = !inSelectionPage && !inSettingsMode && !inAiMode;
         boolean outlineOn = bookManagerView.isOutlineVisible();
         boolean volChapMode = bookManagerView.isVolChapOutlineMode();
 
         // Back / forward
-        backBtn.setDisable(inSelectionPage && !inSettingsMode);
-        forwardBtn.setDisable(!inSelectionPage || inSettingsMode);
+        backBtn.setDisable(inSelectionPage && !inSettingsMode && !inAiMode);
+        forwardBtn.setDisable(!inSelectionPage || inSettingsMode || inAiMode);
 
-        // Toolbar center/right visibility on selection page
+        if (inAiMode && !inSettingsMode) {
+            // ── AI mode toolbar ──
+            toolbarCenter.setVisible(true);
+            toolbarCenter.setManaged(true);
+            toolbarRight.setVisible(false);
+            toolbarRight.setManaged(false);
+
+            // AI mode left bar with session/nav toggle buttons
+            leftBar.setVisible(true);
+            leftBar.setManaged(true);
+            rebuildAiLeftBar();
+
+            // Hide normal center buttons, show AI entry active
+            setCenterVisible(outlineTreeBtn, false);
+            setCenterVisible(volChapOutlineBtn, false);
+            aiEntryBtn.setGraphic(new StackPane(IconButtons.aiEntryActiveButton().getGraphic()));
+            return;
+        }
+
+        // ── Normal / settings mode ──
+        // Restore normal left bar if was in AI mode
+        restoreNormalLeftBar();
+
+        // Restore normal AI entry icon
+        aiEntryBtn.setGraphic(new StackPane(IconButtons.aiEntryButton().getGraphic()));
+
+        // Toolbar center/right visibility
         toolbarCenter.setVisible(inWorkspace);
         toolbarCenter.setManaged(inWorkspace);
         toolbarRight.setVisible(inWorkspace);
         toolbarRight.setManaged(inWorkspace);
+
+        // Show normal center buttons
+        setCenterVisible(outlineTreeBtn, true);
+        setCenterVisible(volChapOutlineBtn, true);
 
         // Outline buttons highlight
         updateOutlineBtn(outlineOn && !volChapMode);
@@ -249,6 +323,52 @@ public class MainView {
             setLeftBtn(outlineSidebarToggleBtn, false);
             updateVolChapIcons();
         }
+    }
+
+    private void rebuildAiLeftBar() {
+        if (aiConversationView == null) return;
+        leftBar.getChildren().clear();
+        leftBar.setPadding(new Insets(8, 4, 8, 4));
+        leftBar.setStyle("-fx-background-color: #111a34; -fx-border-color: #223055; -fx-border-width: 0 1 0 0;");
+        leftBar.setAlignment(Pos.TOP_CENTER);
+
+        boolean sessionVis = aiConversationView.isSessionPanelVisible();
+        Button sBtn = sessionVis ? IconButtons.sessionToggleActiveButton() : IconButtons.sessionToggleButton();
+        tip(sBtn, "会话列表", "right");
+        sBtn.setOnAction(e -> {
+            if (aiConversationView != null) {
+                aiConversationView.toggleSessionPanel();
+                rebuildAiLeftBar();
+            }
+        });
+
+        boolean navVis = aiConversationView.isNavTreeVisible();
+        Button nBtn = navVis ? IconButtons.navTreeToggleActiveButton() : IconButtons.navTreeToggleButton();
+        tip(nBtn, "对话树", "right");
+        nBtn.setOnAction(e -> {
+            if (aiConversationView != null) {
+                aiConversationView.toggleNavTree();
+                rebuildAiLeftBar();
+            }
+        });
+
+        leftBar.getChildren().addAll(sBtn, nBtn);
+    }
+
+    private void restoreNormalLeftBar() {
+        // Check if left bar is empty or showing AI buttons (first child isn't volToggleBtn)
+        if (leftBar.getChildren().isEmpty() || leftBar.getChildren().get(0) != volToggleBtn) {
+            leftBar.getChildren().clear();
+            leftBar.setPadding(new Insets(8, 4, 8, 4));
+            leftBar.setStyle("-fx-background-color: #111a34; -fx-border-color: #223055; -fx-border-width: 0 1 0 0;");
+            leftBar.setAlignment(Pos.TOP_CENTER);
+            leftBar.getChildren().addAll(volToggleBtn, chapToggleBtn, outlineSidebarToggleBtn, aiBtn);
+        }
+    }
+
+    private void setCenterVisible(Button btn, boolean visible) {
+        btn.setVisible(visible);
+        btn.setManaged(visible);
     }
 
     private void refreshLeftBar() {
