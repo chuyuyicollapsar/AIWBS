@@ -299,9 +299,42 @@ public final class IconButtons {
         return wrap(i);
     }
 
-    // ── Nav tree toggle ──
+    // ── Branch navigator (AI chat left bar) ──
+    // Fork icon: a path that splits into two branches.
 
-    public static Button navTreeToggleButton() {
+    public static Button branchNavigatorButton() {
+        Pane i = bg();
+        Rectangle f = new Rectangle(4, 4, 22, 22);
+        f.setArcWidth(6); f.setArcHeight(6);
+        f.setFill(Color.TRANSPARENT); f.setStroke(B); f.setStrokeWidth(2.0);
+        i.getChildren().add(f);
+        i.getChildren().add(ln(15, 6, 15, 13, B));
+        i.getChildren().add(ln(15, 13, 8, 20, B));
+        i.getChildren().add(ln(15, 13, 22, 20, B));
+        Circle n = new Circle(15, 13, 2.5);
+        n.setFill(B);
+        i.getChildren().add(n);
+        return wrap(i);
+    }
+
+    public static Button branchNavigatorActiveButton() {
+        Pane i = bg();
+        Rectangle f = new Rectangle(4, 4, 22, 22);
+        f.setArcWidth(6); f.setArcHeight(6);
+        f.setFill(Color.TRANSPARENT); f.setStroke(G); f.setStrokeWidth(2.0);
+        i.getChildren().add(f);
+        i.getChildren().add(ln(15, 6, 15, 13, G));
+        i.getChildren().add(ln(15, 13, 8, 20, G));
+        i.getChildren().add(ln(15, 13, 22, 20, G));
+        Circle n = new Circle(15, 13, 2.5);
+        n.setFill(G);
+        i.getChildren().add(n);
+        return wrap(i);
+    }
+
+    // ── Path node navigator (reserved for future use) ──
+
+    public static Button pathNodeNavigatorButton() {
         Pane i = bg();
         Rectangle f = new Rectangle(4, 4, 22, 22);
         f.setArcWidth(6); f.setArcHeight(6);
@@ -316,7 +349,7 @@ public final class IconButtons {
         return wrap(i);
     }
 
-    public static Button navTreeToggleActiveButton() {
+    public static Button pathNodeNavigatorActiveButton() {
         Pane i = bg();
         Rectangle f = new Rectangle(4, 4, 22, 22);
         f.setArcWidth(6); f.setArcHeight(6);

@@ -118,8 +118,8 @@ public class AiChatView {
         sBtn.setOnAction(e -> { toggleSessionPanel(); refreshLeftBar(); });
 
         boolean nVis = navVis;
-        Button nBtn = nVis ? IconButtons.navTreeToggleActiveButton() : IconButtons.navTreeToggleButton();
-        ViewUtils.tip(nBtn, "对话树", "right");
+        Button nBtn = nVis ? IconButtons.branchNavigatorActiveButton() : IconButtons.branchNavigatorButton();
+        ViewUtils.tip(nBtn, "分支导航器", "right");
         nBtn.setOnAction(e -> { toggleNavTree(); refreshLeftBar(); });
 
         bar.getChildren().addAll(sBtn, nBtn);
@@ -134,8 +134,8 @@ public class AiChatView {
         ViewUtils.tip(sBtn, "会话列表", "right");
         sBtn.setOnAction(e -> { toggleSessionPanel(); refreshLeftBar(); });
         boolean nVis = navVis;
-        Button nBtn = nVis ? IconButtons.navTreeToggleActiveButton() : IconButtons.navTreeToggleButton();
-        ViewUtils.tip(nBtn, "对话树", "right");
+        Button nBtn = nVis ? IconButtons.branchNavigatorActiveButton() : IconButtons.branchNavigatorButton();
+        ViewUtils.tip(nBtn, "分支导航器", "right");
         nBtn.setOnAction(e -> { toggleNavTree(); refreshLeftBar(); });
         leftBar.getChildren().addAll(sBtn, nBtn);
     }
