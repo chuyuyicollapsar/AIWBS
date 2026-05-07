@@ -330,4 +330,59 @@ public final class IconButtons {
         }
         return wrap(i);
     }
+
+    /** Small copy icon for chat bubbles. */
+    public static Button copyButton(Color c) {
+        Pane i = new Pane();
+        i.setPrefSize(18, 18);
+        Rectangle bg = new Rectangle(2, 6, 11, 11);
+        bg.setArcWidth(2.5); bg.setArcHeight(2.5);
+        bg.setFill(null); bg.setStroke(c); bg.setStrokeWidth(1.6);
+        Rectangle fg = new Rectangle(6, 2, 11, 11);
+        fg.setArcWidth(2.5); fg.setArcHeight(2.5);
+        fg.setFill(null); fg.setStroke(c); fg.setStrokeWidth(1.6);
+        i.getChildren().addAll(bg, fg);
+        return iconBtn(i);
+    }
+
+    /** Pen icon: edit & resend. */
+    public static Button editButton(Color c) {
+        Pane i = new Pane();
+        i.setPrefSize(18, 18);
+        Line shaft = new Line(5, 14, 12, 7);
+        shaft.setStroke(c); shaft.setStrokeWidth(1.6);
+        shaft.setStrokeLineCap(javafx.scene.shape.StrokeLineCap.ROUND);
+        Line nib = new Line(12, 7, 14, 5);
+        nib.setStroke(c); nib.setStrokeWidth(1.6);
+        nib.setStrokeLineCap(javafx.scene.shape.StrokeLineCap.ROUND);
+        Line base = new Line(3, 17, 13, 17);
+        base.setStroke(c); base.setStrokeWidth(1.2);
+        base.setStrokeLineCap(javafx.scene.shape.StrokeLineCap.ROUND);
+        i.getChildren().addAll(shaft, nib, base);
+        return iconBtn(i);
+    }
+
+    /** Plus icon: insert custom pair. */
+    public static Button insertButton(Color c) {
+        Pane i = new Pane();
+        i.setPrefSize(18, 18);
+        Line h = new Line(4, 9, 14, 9);
+        h.setStroke(c); h.setStrokeWidth(1.6);
+        h.setStrokeLineCap(javafx.scene.shape.StrokeLineCap.ROUND);
+        Line v = new Line(9, 4, 9, 14);
+        v.setStroke(c); v.setStrokeWidth(1.6);
+        v.setStrokeLineCap(javafx.scene.shape.StrokeLineCap.ROUND);
+        Rectangle ring = new Rectangle(1.5, 1.5, 15, 15);
+        ring.setArcWidth(5); ring.setArcHeight(5);
+        ring.setFill(null); ring.setStroke(c); ring.setStrokeWidth(1.2);
+        i.getChildren().addAll(ring, h, v);
+        return iconBtn(i);
+    }
+
+    private static Button iconBtn(Pane graphic) {
+        Button btn = new Button();
+        btn.setGraphic(graphic);
+        btn.setStyle("-fx-background-color: transparent; -fx-background-insets: 0; -fx-padding: 2; -fx-cursor: hand; -fx-border-color: transparent; -fx-border-width: 0; -fx-focus-color: transparent;");
+        return btn;
+    }
 }

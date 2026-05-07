@@ -16,6 +16,7 @@ import javafx.scene.Parent;
 import javafx.scene.control.*;
 import javafx.scene.input.*;
 import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -34,26 +35,23 @@ public class AiConversationView {
 
     // Panels
     private final VBox sessionPanel = new VBox(8);
-    private final VBox navTreePanel = new VBox(8);
+    private final VBox navPanel = new VBox(8);
+    private final VBox messageArea = new VBox(12);
+    private ScrollPane messageScroll;
+    private TextArea inputField;
+    private Button sendButton;
+    private Label sessionTitle;
+    private boolean bottomScrollScheduled;
+    private int pendingBottomScrollPulses;
 
     // State
     private AiSession currentSession;
-    /** Maps branch-point node ID → selected child ID at that branch. */
-    private final Map<String, String> branchSelections = new HashMap<>();
-    private boolean sessionPanelVisible = true;
-    private boolean navTreeVisible = true;
+    private final Map<String, String> branchSel = new HashMap<>(); // branch point → selected child
+    private boolean sessionVis = true;
+    private boolean navVis = true;
+    private Runnable onToggle;
 
-    // Conversation display
-    private VBox messageContainer;
-    private ScrollPane messageScrollPane;
-    private TextArea inputField;
-    private Button sendButton;
-    private Label sessionTitleLabel;
-
-    // Callback
-    private Runnable onPanelToggle;
-
-    private static final DateTimeFormatter TITLE_FMT = DateTimeFormatter.ofPattern("yy.MM.dd.HH.mm");
+    private static final DateTimeFormatter TTL = DateTimeFormatter.ofPattern("yy.MM.dd.HH.mm");
 
     public AiConversationView(AppState appState, StateStore stateStore, Book book) {
         this.appState = appState;
@@ -65,141 +63,134 @@ public class AiConversationView {
     }
 
     public Parent getRoot() { return root; }
-    public void setOnPanelToggle(Runnable r) { this.onPanelToggle = r; }
-    public boolean isSessionPanelVisible() { return sessionPanelVisible; }
-    public boolean isNavTreeVisible() { return navTreeVisible; }
+    public void setOnPanelToggle(Runnable r) { onToggle = r; }
+    public boolean isSessionPanelVisible() { return sessionVis; }
+    public boolean isNavTreeVisible() { return navVis; }
 
     public void toggleSessionPanel() {
-        sessionPanelVisible = !sessionPanelVisible;
-        sessionPanel.setVisible(sessionPanelVisible);
-        sessionPanel.setManaged(sessionPanelVisible);
-        if (onPanelToggle != null) onPanelToggle.run();
+        sessionVis = !sessionVis;
+        sessionPanel.setVisible(sessionVis);
+        sessionPanel.setManaged(sessionVis);
+        if (onToggle != null) onToggle.run();
     }
 
     public void toggleNavTree() {
-        navTreeVisible = !navTreeVisible;
-        navTreePanel.setVisible(navTreeVisible);
-        navTreePanel.setManaged(navTreeVisible);
-        if (onPanelToggle != null) onPanelToggle.run();
-    }
-
-    private static String makeTitle() {
-        return LocalDateTime.now().format(TITLE_FMT);
+        navVis = !navVis;
+        navPanel.setVisible(navVis);
+        navPanel.setManaged(navVis);
+        if (onToggle != null) onToggle.run();
     }
 
     // ════════════════════════════════════════
-    //  UI Build
+    //  Layout
     // ════════════════════════════════════════
 
     private void buildUI() {
         root.setStyle("-fx-background-color: #0f1730;");
+
         buildSessionPanel();
-        buildNavTreePanel();
-        BorderPane conversationArea = buildConversationArea();
-        HBox.setHgrow(conversationArea, Priority.ALWAYS);
+        buildNavPanel();
+        BorderPane conv = buildConvPanel();
+
         HBox center = new HBox(0);
-        center.getChildren().addAll(sessionPanel, navTreePanel, conversationArea);
+        center.getChildren().addAll(sessionPanel, navPanel, conv);
+        HBox.setHgrow(conv, Priority.ALWAYS);
         root.setCenter(center);
     }
-
-    // ── Session Panel ──
 
     private void buildSessionPanel() {
         sessionPanel.setPrefWidth(220);
         sessionPanel.setMinWidth(0);
         sessionPanel.setPadding(new Insets(12));
         sessionPanel.setStyle("-fx-background-color: #111a34; -fx-border-color: #223055; -fx-border-width: 0 1 0 0;");
-        Label title = new Label("Sessions - " + book.getName());
+
+        Label title = new Label("Sessions – " + book.getName());
         title.setWrapText(true);
-        title.setStyle("-fx-text-fill: white; -fx-font-size: 15px; -fx-font-weight: bold;");
+        title.setStyle("-fx-text-fill: #fff; -fx-font-size: 15px; -fx-font-weight: bold;");
+
         Button newBtn = new Button("+ New Session");
         newBtn.setMaxWidth(Double.MAX_VALUE);
-        newBtn.setOnAction(e -> promptNewSession());
+        newBtn.setOnAction(e -> promptNew());
+
         VBox.setVgrow(sessionPanel, Priority.ALWAYS);
         sessionPanel.getChildren().addAll(title, newBtn);
     }
 
-    // ── Nav Tree Panel ──
-
-    private void buildNavTreePanel() {
-        navTreePanel.setPrefWidth(240);
-        navTreePanel.setMinWidth(0);
-        navTreePanel.setPadding(new Insets(12));
-        navTreePanel.setStyle("-fx-background-color: #111a34; -fx-border-color: #223055; -fx-border-width: 0 1 0 0;");
+    private void buildNavPanel() {
+        navPanel.setPrefWidth(240);
+        navPanel.setMinWidth(0);
+        navPanel.setPadding(new Insets(12));
+        navPanel.setStyle("-fx-background-color: #111a34; -fx-border-color: #223055; -fx-border-width: 0 1 0 0;");
     }
 
-    // ── Conversation Area ──
-
-    private BorderPane buildConversationArea() {
+    private BorderPane buildConvPanel() {
         BorderPane area = new BorderPane();
-        area.setPadding(new Insets(0));
-        sessionTitleLabel = new Label("AI Conversation");
-        sessionTitleLabel.setStyle("-fx-text-fill: white; -fx-font-size: 18px; -fx-font-weight: bold; -fx-padding: 12 16 4 16;");
-        sessionTitleLabel.setMaxWidth(Double.MAX_VALUE);
 
-        messageContainer = new VBox(12);
-        messageContainer.setPadding(new Insets(16));
-        messageContainer.setFillWidth(true);
-        messageContainer.setStyle("-fx-background-color: #0f1730;");
-        ScrollPane scroll = new ScrollPane(messageContainer);
-        messageScrollPane = scroll;
-        scroll.setFitToWidth(true);
-        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        scroll.setStyle("-fx-background: #0f1730; -fx-background-color: #0f1730; -fx-border-color: transparent;");
-        scroll.setFocusTraversable(false);
-        // Ensure the viewport also uses the dark background
-        scroll.skinProperty().addListener((obs, old, skin) -> {
-            if (skin != null) {
-                var vp = scroll.lookup(".viewport");
-                if (vp instanceof Region r) r.setStyle("-fx-background-color: #0f1730;");
+        sessionTitle = new Label("AI Conversation");
+        sessionTitle.setStyle("-fx-text-fill: #fff; -fx-font-size: 18px; -fx-font-weight: bold; -fx-padding: 12 16 4 16;");
+        sessionTitle.setMaxWidth(Double.MAX_VALUE);
+
+        messageArea.setPadding(new Insets(16));
+        messageArea.setFillWidth(true);
+        messageArea.setStyle("-fx-background-color: #0f1730;");
+
+        messageScroll = new ScrollPane(messageArea);
+        messageScroll.setFitToWidth(true);
+        messageScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        messageScroll.setStyle("-fx-background: transparent; -fx-background-color: #0f1730; -fx-border-color: transparent; -fx-background-insets: 0; -fx-focus-color: transparent; -fx-faint-focus-color: transparent;");
+        messageScroll.setFocusTraversable(false);
+        messageArea.heightProperty().addListener((obs, oldHeight, newHeight) -> {
+            if (pendingBottomScrollPulses > 0) {
+                pendingBottomScrollPulses = Math.max(pendingBottomScrollPulses, 2);
+                scheduleBottomScroll();
             }
         });
-        VBox.setVgrow(scroll, Priority.ALWAYS);
-        StackPane messageFrame = new StackPane(scroll);
-        messageFrame.setPadding(new Insets(0, 0, 0, 1));
-        messageFrame.setStyle("-fx-background-color: #0f1730; -fx-border-color: #223055; -fx-border-width: 0 0 0 1;");
-        messageFrame.setFocusTraversable(false);
 
-        Label placeholder = new Label("Select or create a session to start");
-        placeholder.setStyle("-fx-text-fill: rgba(255,255,255,0.40); -fx-font-size: 16px;");
-        placeholder.setAlignment(Pos.CENTER);
-        StackPane placeholderPane = new StackPane(placeholder);
-        placeholderPane.setPrefHeight(400);
-        messageContainer.getChildren().add(placeholderPane);
+        StackPane frame = new StackPane(messageScroll);
+        frame.setStyle("-fx-background-color: #0f1730;");
+        frame.setFocusTraversable(false);
+        VBox.setVgrow(messageScroll, Priority.ALWAYS);
 
-        HBox inputArea = buildInputArea();
-        inputArea.setPadding(new Insets(12, 16, 16, 16));
-        area.setTop(sessionTitleLabel);
-        area.setCenter(messageFrame);
-        area.setBottom(inputArea);
+        Label ph = new Label("Select or create a session to start");
+        ph.setStyle("-fx-text-fill: rgba(255,255,255,0.40); -fx-font-size: 16px;");
+        ph.setAlignment(Pos.CENTER);
+        StackPane php = new StackPane(ph);
+        php.setPrefHeight(400);
+        messageArea.getChildren().add(php);
+
+        HBox input = buildInput();
+        input.setPadding(new Insets(12, 16, 16, 16));
+
+        area.setTop(sessionTitle);
+        area.setCenter(frame);
+        area.setBottom(input);
         return area;
     }
 
-    private HBox buildInputArea() {
+    private HBox buildInput() {
         inputField = new TextArea();
-        inputField.setPromptText("Type a message... (Ctrl+Enter to send)");
+        inputField.setPromptText("Type a message… (Enter to send)");
         inputField.setWrapText(true);
         inputField.setPrefRowCount(1);
         inputField.setMaxHeight(120);
-        inputField.setStyle("-fx-font-size: 14px; -fx-padding: 8 14; -fx-background-radius: 12; -fx-border-radius: 12;");
-        HBox.setHgrow(inputField, Priority.ALWAYS);
+        inputField.setStyle("-fx-font-size: 14px; -fx-padding: 8 14; -fx-background-radius: 12;");
+
         sendButton = new Button("Send");
-        sendButton.getStyleClass().add("primary-action");
         sendButton.setStyle("-fx-font-size: 14px; -fx-padding: 8 20;");
-        sendButton.setOnAction(e -> sendMessage());
-        // Enter to send, Shift+Enter for newline
+        sendButton.setOnAction(e -> send());
+
         inputField.addEventHandler(KeyEvent.KEY_PRESSED, e -> {
             if (e.getCode() == KeyCode.ENTER) {
                 e.consume();
                 if (e.isShiftDown()) {
-                    // Shift+Enter → insert newline explicitly
                     inputField.insertText(inputField.getCaretPosition(), "\n");
                 } else {
-                    // Enter → send
-                    sendMessage();
+                    send();
                 }
             }
         });
+
+        HBox.setHgrow(inputField, Priority.ALWAYS);
         HBox box = new HBox(10, inputField, sendButton);
         box.setAlignment(Pos.CENTER);
         return box;
@@ -213,208 +204,193 @@ public class AiConversationView {
         while (sessionPanel.getChildren().size() > 2) {
             sessionPanel.getChildren().remove(sessionPanel.getChildren().size() - 1);
         }
+
         List<AiSession> sessions = store.loadAll();
-        ScrollPane scroll = new ScrollPane();
-        scroll.setFitToWidth(true);
-        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        scroll.setStyle("-fx-background: transparent; -fx-background-color: transparent; -fx-border-color: transparent;");
-        VBox.setVgrow(scroll, Priority.ALWAYS);
+        ScrollPane sp = new ScrollPane();
+        sp.setFitToWidth(true);
+        sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        sp.setStyle("-fx-background: transparent; -fx-background-color: transparent; -fx-border-color: transparent;");
+        VBox.setVgrow(sp, Priority.ALWAYS);
+
         VBox list = new VBox(4);
-        for (AiSession session : sessions) {
-            Button btn = new Button(session.getTitle());
+        for (AiSession s : sessions) {
+            Button btn = new Button(s.getTitle());
             btn.setMaxWidth(Double.MAX_VALUE);
             btn.setAlignment(Pos.CENTER_LEFT);
-            if (currentSession != null && currentSession.getId().equals(session.getId())) {
-                btn.setStyle("-fx-background-color: #d7bb74; -fx-text-fill: #11182d;");
-            } else {
-                btn.setStyle("-fx-background-color: transparent; -fx-text-fill: #e7ecff; -fx-border-color: transparent;");
-            }
-            btn.setOnAction(e -> selectSession(session));
-            btn.setOnMouseClicked(e -> {
-                if (e.getButton() == MouseButton.SECONDARY) {
-                    ContextMenu menu = new ContextMenu();
-                    MenuItem rename = new MenuItem("Rename");
-                    rename.setOnAction(ev -> renameSession(session));
-                    MenuItem del = new MenuItem("Delete");
-                    del.setOnAction(ev -> deleteSession(session));
-                    menu.getItems().addAll(rename, del);
-                    menu.show(btn, e.getScreenX(), e.getScreenY());
-                }
+            boolean active = currentSession != null && currentSession.getId().equals(s.getId());
+            btn.setStyle(active
+                    ? "-fx-background-color: #d7bb74; -fx-text-fill: #11182d;"
+                    : "-fx-background-color: transparent; -fx-text-fill: #e7ecff;");
+
+            btn.setOnAction(e -> selectSession(s));
+            btn.setOnContextMenuRequested(ev -> {
+                ContextMenu m = new ContextMenu();
+                MenuItem rn = new MenuItem("Rename");
+                rn.setOnAction(x -> rename(s));
+                MenuItem del = new MenuItem("Delete");
+                del.setOnAction(x -> delete(s));
+                m.getItems().addAll(rn, del);
+                m.show(btn, ev.getScreenX(), ev.getScreenY());
             });
             list.getChildren().add(btn);
         }
-        scroll.setContent(list);
-        sessionPanel.getChildren().add(scroll);
+        sp.setContent(list);
+        sessionPanel.getChildren().add(sp);
+
         if (currentSession == null && !sessions.isEmpty()) {
-            selectSession(sessions.get(0));
+            selectSession(sessions.getFirst());
         } else if (currentSession != null) {
-            refreshNavTree();
+            refreshNav();
             refreshMessages();
         }
     }
 
-    private void selectSession(AiSession session) {
-        currentSession = session;
-        branchSelections.clear();
+    private void selectSession(AiSession s) {
+        currentSession = s;
+        branchSel.clear();
         loadSessions();
     }
 
-    private void promptNewSession() {
-        TextInputDialog dialog = new TextInputDialog("New Session");
-        dialog.setTitle("New Session");
-        dialog.setHeaderText("Create a new AI conversation session");
-        dialog.showAndWait().ifPresent(name -> {
+    private void promptNew() {
+        TextInputDialog d = new TextInputDialog("New Session");
+        d.setTitle("New Session");
+        d.showAndWait().ifPresent(name -> {
             if (name.isBlank()) name = "New Session";
-            AiSession session = new AiSession(name);
-            store.save(session);
-            selectSession(session);
+            AiSession s = new AiSession(name);
+            store.save(s);
+            selectSession(s);
         });
     }
 
-    private void renameSession(AiSession session) {
-        TextInputDialog dialog = new TextInputDialog(session.getTitle());
-        dialog.setTitle("Rename Session");
-        dialog.setHeaderText("Rename session");
-        dialog.showAndWait().ifPresent(name -> {
+    private void rename(AiSession s) {
+        TextInputDialog d = new TextInputDialog(s.getTitle());
+        d.setTitle("Rename");
+        d.showAndWait().ifPresent(name -> {
             if (!name.isBlank()) {
-                session.setTitle(name);
-                store.save(session);
+                s.setTitle(name);
+                store.save(s);
                 loadSessions();
             }
         });
     }
 
-    private void deleteSession(AiSession session) {
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
-                "Delete session \"" + session.getTitle() + "\"?", ButtonType.OK, ButtonType.CANCEL);
-        alert.showAndWait().filter(ButtonType.OK::equals).ifPresent(ok -> {
-            store.delete(session);
-            if (currentSession != null && currentSession.getId().equals(session.getId())) {
+    private void delete(AiSession s) {
+        Alert a = new Alert(Alert.AlertType.CONFIRMATION, "Delete \"" + s.getTitle() + "\"?",
+                ButtonType.OK, ButtonType.CANCEL);
+        a.showAndWait().filter(ButtonType.OK::equals).ifPresent(ok -> {
+            store.delete(s);
+            if (currentSession != null && currentSession.getId().equals(s.getId())) {
                 currentSession = null;
-                branchSelections.clear();
-                List<AiSession> remaining = store.loadAll();
-                if (!remaining.isEmpty()) selectSession(remaining.get(0));
-                else { loadSessions(); refreshNavTree(); refreshMessages(); }
-            } else { loadSessions(); }
+                branchSel.clear();
+                List<AiSession> rem = store.loadAll();
+                if (!rem.isEmpty()) selectSession(rem.getFirst());
+                else { loadSessions(); refreshNav(); refreshMessages(); }
+            } else loadSessions();
         });
     }
 
     // ════════════════════════════════════════
-    //  Nav Tree
+    //  Branch Navigator
     // ════════════════════════════════════════
 
-    private void refreshNavTree() {
-        navTreePanel.getChildren().clear();
-
+    private void refreshNav() {
+        navPanel.getChildren().clear();
         Label title = new Label("Branch Navigator");
-        title.setStyle("-fx-text-fill: white; -fx-font-size: 15px; -fx-font-weight: bold;");
-        navTreePanel.getChildren().add(title);
-
+        title.setStyle("-fx-text-fill: #fff; -fx-font-size: 15px; -fx-font-weight: bold;");
+        navPanel.getChildren().add(title);
         if (currentSession == null) return;
 
-        initBranchDefaults(currentSession.getRootMessages());
+        initDefaults(currentSession.getRootMessages());
 
         VBox list = new VBox(4);
-        collectPathBranchGroups(list);
+        List<AiMessage> path = selectedPath();
+        int depth = 0;
+        for (AiMessage n : path) {
+            if (n.getChildren().size() >= 2) {
+                list.getChildren().add(buildBranchGroup(n, depth));
+            }
+            depth++;
+        }
         if (list.getChildren().isEmpty()) {
-            Label empty = new Label("(no branches yet)");
-            empty.setStyle("-fx-text-fill: rgba(255,255,255,0.35); -fx-font-size: 12px; -fx-padding: 8 0;");
-            list.getChildren().add(empty);
+            Label e = new Label("(no branches yet)");
+            e.setStyle("-fx-text-fill: rgba(255,255,255,0.35); -fx-font-size: 12px; -fx-padding: 8 0;");
+            list.getChildren().add(e);
         }
 
         ScrollPane sp = new ScrollPane(list);
         sp.setFitToWidth(true);
         sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         sp.setStyle("-fx-background: transparent; -fx-background-color: transparent; -fx-border-color: transparent;");
-        sp.skinProperty().addListener((obs, old, skin) -> {
-            if (skin != null && sp.lookup(".viewport") instanceof Region vp) {
-                vp.setStyle("-fx-background-color: transparent;");
-            }
-        });
         VBox.setVgrow(sp, Priority.ALWAYS);
-        navTreePanel.getChildren().add(sp);
+        navPanel.getChildren().add(sp);
     }
 
-    // ── Branch-point navigation ──
+    private Node buildBranchGroup(AiMessage bp, int depth) {
+        VBox g = new VBox(3);
+        g.setPadding(new Insets(6, 2, 6, 2 + depth * 14));
 
-    /** Ensure every branch point has a default selection (first child). */
-    private void initBranchDefaults(List<AiMessage> roots) {
-        for (AiMessage root : roots) initBranchDefaults(root);
-    }
+        Label l = new Label(bp.getTitle() == null || bp.getTitle().isBlank() ? "(branch)" : bp.getTitle());
+        l.setStyle("-fx-text-fill: #d7bb74; -fx-font-size: 11px; -fx-font-weight: bold;");
 
-    private void initBranchDefaults(AiMessage node) {
-        if (node.getChildren().size() >= 2 && !branchSelections.containsKey(node.getId())) {
-            branchSelections.put(node.getId(), node.getChildren().getFirst().getId());
-        }
-        for (AiMessage child : node.getChildren()) initBranchDefaults(child);
-    }
+        String sel = branchSel.get(bp.getId());
+        String bpId = bp.getId();
+        for (AiMessage ch : bp.getChildren()) {
+            String cid = ch.getId();
+            boolean s = cid.equals(sel);
+            String d = ch.getTitle() == null || ch.getTitle().isBlank() ? "(unnamed)" : ch.getTitle();
+            if (d.length() > 18) d = d.substring(0, 18) + "…";
 
-    private void collectPathBranchGroups(VBox list) {
-        List<AiMessage> path = buildSelectedPath();
-        int depth = 0;
-        for (AiMessage node : path) {
-            if (node.getChildren().size() >= 2) {
-                list.getChildren().add(createBranchGroup(node, depth));
-            }
-            depth++;
-        }
-    }
-
-    private Node createBranchGroup(AiMessage branchPoint, int indent) {
-        VBox group = new VBox(3);
-        group.setPadding(new Insets(6, 2, 6, 2 + indent * 14));
-
-        Label groupLabel = new Label(branchPoint.getTitle() == null || branchPoint.getTitle().isBlank()
-                ? "(branch)" : branchPoint.getTitle());
-        groupLabel.setStyle("-fx-text-fill: #d7bb74; -fx-font-size: 11px; -fx-font-weight: bold;");
-
-        String selectedId = branchSelections.get(branchPoint.getId());
-        String bpId = branchPoint.getId();
-
-        for (AiMessage child : branchPoint.getChildren()) {
-            String cId = child.getId();
-            boolean sel = cId.equals(selectedId);
-            String display = child.getTitle() == null || child.getTitle().isBlank() ? "(unnamed)" : child.getTitle();
-            if (display.length() > 16) display = display.substring(0, 16) + "…";
-
-            Button btn = new Button((sel ? "✓ " : "  ") + display);
-            btn.setMaxWidth(Double.MAX_VALUE);
-            btn.setAlignment(Pos.CENTER_LEFT);
-            btn.setStyle(sel
+            Button b = new Button((s ? "✓ " : "  ") + d);
+            b.setMaxWidth(Double.MAX_VALUE);
+            b.setAlignment(Pos.CENTER_LEFT);
+            b.setStyle(s
                     ? "-fx-background-color: #d7bb74; -fx-text-fill: #11182d; -fx-font-size: 11px; -fx-padding: 2 6; -fx-background-radius: 4;"
                     : "-fx-background-color: transparent; -fx-text-fill: #aab; -fx-font-size: 11px; -fx-padding: 2 6; -fx-border-color: #334; -fx-border-radius: 4;");
-            btn.setOnAction(e -> {
-                branchSelections.put(bpId, cId);
-                refreshNavTree();
+            b.setOnAction(ev -> {
+                branchSel.put(bpId, cid);
+                refreshNav();
                 refreshMessages();
             });
-            group.getChildren().add(btn);
+            g.getChildren().add(b);
         }
-
-        group.getChildren().addFirst(groupLabel);
-        return group;
+        g.getChildren().addFirst(l);
+        return g;
     }
 
-    /** Build the conversation path by following branch selections. */
-    private List<AiMessage> buildSelectedPath() {
-        List<AiMessage> path = new ArrayList<>();
-        for (AiMessage root : currentSession.getRootMessages()) {
-            followPath(root, path);
-        }
-        return path;
+    /** Ensure every branch point has a default (first child). */
+    private void initDefaults(List<AiMessage> roots) {
+        for (AiMessage r : roots) initDefaults(r);
     }
 
-    private void followPath(AiMessage node, List<AiMessage> out) {
-        out.add(node);
-        List<AiMessage> children = node.getChildren();
-        if (children.isEmpty()) return;
-        if (children.size() == 1) { followPath(children.getFirst(), out); return; }
-        // Branch point: follow selected child (default: first)
-        String picked = branchSelections.get(node.getId());
-        for (AiMessage child : children) {
-            if (child.getId().equals(picked)) { followPath(child, out); return; }
+    private void initDefaults(AiMessage n) {
+        if (n.getChildren().size() >= 2 && !branchSel.containsKey(n.getId())) {
+            branchSel.put(n.getId(), n.getChildren().getFirst().getId());
         }
-        followPath(children.getFirst(), out);
+        for (AiMessage c : n.getChildren()) initDefaults(c);
+    }
+
+    // ════════════════════════════════════════
+    //  Path Building
+    // ════════════════════════════════════════
+
+    private List<AiMessage> selectedPath() {
+        List<AiMessage> p = new ArrayList<>();
+        for (AiMessage r : currentSession.getRootMessages()) {
+            followPath(r, p);
+        }
+        return p;
+    }
+
+    private void followPath(AiMessage n, List<AiMessage> out) {
+        out.add(n);
+        List<AiMessage> ch = n.getChildren();
+        if (ch.isEmpty()) return;
+        if (ch.size() == 1) { followPath(ch.getFirst(), out); return; }
+        String picked = branchSel.get(n.getId());
+        for (AiMessage c : ch) {
+            if (c.getId().equals(picked)) { followPath(c, out); return; }
+        }
+        followPath(ch.getFirst(), out);
     }
 
     // ════════════════════════════════════════
@@ -422,342 +398,166 @@ public class AiConversationView {
     // ════════════════════════════════════════
 
     private void refreshMessages() {
-        messageContainer.getChildren().clear();
+        messageArea.getChildren().clear();
         if (currentSession == null) {
-            Label placeholder = new Label("Select or create a session to start");
-            placeholder.setStyle("-fx-text-fill: rgba(255,255,255,0.40); -fx-font-size: 16px;");
-            placeholder.setAlignment(Pos.CENTER);
-            StackPane pane = new StackPane(placeholder);
-            pane.setPrefHeight(400);
-            messageContainer.getChildren().add(pane);
-            sessionTitleLabel.setText("AI Conversation");
+            Label ph = new Label("Select or create a session to start");
+            ph.setStyle("-fx-text-fill: rgba(255,255,255,0.40); -fx-font-size: 16px;");
+            ph.setAlignment(Pos.CENTER);
+            StackPane p = new StackPane(ph);
+            p.setPrefHeight(400);
+            messageArea.getChildren().add(p);
+            sessionTitle.setText("AI Conversation");
             inputField.setDisable(true);
             sendButton.setDisable(true);
             return;
         }
-        sessionTitleLabel.setText(currentSession.getTitle());
+        sessionTitle.setText(currentSession.getTitle());
         inputField.setDisable(false);
         sendButton.setDisable(false);
 
-        List<AiMessage> path = buildSelectedPath();
-
+        List<AiMessage> path = selectedPath();
         if (path.isEmpty()) {
-            Label hint = new Label("Type a message below to start.");
-            hint.setWrapText(true);
-            hint.setStyle("-fx-text-fill: rgba(255,255,255,0.40); -fx-font-size: 14px; -fx-padding: 20;");
-            messageContainer.getChildren().add(hint);
+            Label h = new Label("Type a message below to start.");
+            h.setStyle("-fx-text-fill: rgba(255,255,255,0.40); -fx-font-size: 14px; -fx-padding: 20;");
+            h.setWrapText(true);
+            messageArea.getChildren().add(h);
         } else {
-            for (AiMessage node : path) {
-                // Node header
-                Label nodeHeader = new Label(node.getTitle() == null || node.getTitle().isBlank() ? "(unnamed)" : node.getTitle());
-                nodeHeader.setStyle("-fx-text-fill: #d7bb74; -fx-font-size: 13px; -fx-font-weight: bold; -fx-padding: 4 0 2 0;");
+            for (AiMessage n : path) {
+                Label hdr = new Label(n.getTitle() == null || n.getTitle().isBlank() ? "(unnamed)" : n.getTitle());
+                hdr.setStyle("-fx-text-fill: #d7bb74; -fx-font-size: 13px; -fx-font-weight: bold; -fx-padding: 4 0 2 0;");
 
-                // Separator
                 Separator sep = new Separator();
                 sep.setStyle("-fx-background: rgba(215,187,116,0.3);");
 
-                VBox nodeBlock = new VBox(6);
-                nodeBlock.getChildren().addAll(nodeHeader, sep);
+                VBox block = new VBox(6);
+                block.getChildren().addAll(hdr, sep);
 
-                // User message (right-aligned)
-                if (node.getUserContent() != null && !node.getUserContent().isBlank()) {
-                    nodeBlock.getChildren().add(createStableChatBubble(node.getUserContent(), true, node));
+                if (n.getUserContent() != null && !n.getUserContent().isBlank()) {
+                    block.getChildren().add(createBubble(n.getUserContent(), true, n));
                 }
-
-                // Assistant response (left-aligned)
-                if (node.getAssistantContent() != null && !node.getAssistantContent().isBlank()) {
-                    nodeBlock.getChildren().add(createStableChatBubble(node.getAssistantContent(), false, node));
+                if (n.getAssistantContent() != null && !n.getAssistantContent().isBlank()) {
+                    block.getChildren().add(createBubble(n.getAssistantContent(), false, n));
                 }
-
-                messageContainer.getChildren().add(nodeBlock);
+                messageArea.getChildren().add(block);
             }
         }
-        scrollToBottom();
     }
 
-    /** Create a chat bubble with selectable text, auto-sized, no internal scrollbars. */
-    private Node createChatBubble(String text, boolean isUser, AiMessage node) {
+    private Node createBubble(String text, boolean isUser, AiMessage node) {
         String bg = isUser ? "rgba(36, 60, 124, 0.85)" : "rgba(25, 35, 70, 0.85)";
         String fg = isUser ? "#edf2ff" : "#e7ecff";
+        Color c = Color.web(fg);
 
-        TextArea ta = new TextArea(text);
-        ta.setEditable(false);
-        ta.setContextMenu(null);
-        ta.setWrapText(true);
-        ta.setMaxWidth(600);
-        ta.setMinHeight(30);
-        ta.setPrefRowCount(Math.max(1, (int) Math.ceil(text.length() / 40.0) + 1));
+        Label label = new Label(text);
+        label.setWrapText(true);
+        label.setMaxWidth(560);
+        label.setStyle("-fx-text-fill: " + fg + "; -fx-font-size: 14px;");
 
-        ta.setStyle("-fx-background-color: " + bg + "; -fx-control-inner-background: " + bg + "; -fx-text-fill: " + fg + "; "
-                + "-fx-border-color: transparent; -fx-background-radius: 12; -fx-background-insets: 0; "
-                + "-fx-padding: 10 14; -fx-font-size: 14px; -fx-focus-color: transparent; -fx-faint-focus-color: transparent;");
-
-        // Right-click context menu
-        ContextMenu cm = new ContextMenu();
-        if (isUser && node.getUserContent() != null && !node.getUserContent().isBlank()) {
-            MenuItem editItem = new MenuItem("Edit & Resend");
-            editItem.setOnAction(e -> editAndResend(node));
-            cm.getItems().add(editItem);
-        }
-        MenuItem insertItem = new MenuItem("Insert custom pair");
-        insertItem.setOnAction(e -> insertCustomPair(node));
-        cm.getItems().add(insertItem);
-        ta.setContextMenu(cm);
-
-        ta.skinProperty().addListener((obs, old, skin) -> {
-            if (skin != null) {
-                // Disable scrollbars entirely
-                if (ta.lookup(".scroll-pane") instanceof ScrollPane sp) {
-                    sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-                    sp.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-                }
-                Platform.runLater(() -> {
-                    // ALL internal layers transparent so TextArea's single uniform bg shows everywhere
-                    for (String sel : new String[]{".scroll-pane", ".viewport", ".content"}) {
-                        if (ta.lookup(sel) instanceof Region r) {
-                            r.setStyle("-fx-background-color: transparent; -fx-background-insets: 0;");
-                        }
-                    }
-                    // Measure content height and resize to fit
-                    Node content = ta.lookup(".content");
-                    if (content != null) {
-                        double h = content.getBoundsInLocal().getHeight();
-                        if (h > 0) {
-                            ta.setPrefHeight(h + 20);
-                            // Content grew → keep scroll at bottom
-                            scrollToBottom();
-                        }
-                    }
-                });
-            }
-        });
-
-        HBox wrapper = new HBox(ta);
-        wrapper.setAlignment(isUser ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
-        wrapper.setPadding(new Insets(2, 16, 2, 16));
-        HBox.setHgrow(ta, Priority.NEVER);
-        return wrapper;
-    }
-
-    // ════════════════════════════════════════
-    //  Branch operations
-    // ════════════════════════════════════════
-
-    /** Stable non-focusable chat bubble; copy is explicit to avoid TextArea focus artifacts. */
-    private Node createStableChatBubble(String text, boolean isUser, AiMessage node) {
-        String bg = isUser ? "rgba(36, 60, 124, 0.85)" : "rgba(25, 35, 70, 0.85)";
-        String fg = isUser ? "#edf2ff" : "#e7ecff";
-
-        Label content = new Label(text);
-        content.setWrapText(true);
-        content.setMaxWidth(560);
-        content.setStyle("-fx-text-fill: " + fg + "; -fx-font-size: 14px;");
-
-        Button copyButton = new Button("Copy all");
-        copyButton.setFocusTraversable(false);
-        copyButton.setStyle("-fx-background-color: rgba(255,255,255,0.08); -fx-text-fill: rgba(255,255,255,0.72); "
-                + "-fx-border-color: transparent; -fx-background-radius: 6; -fx-font-size: 11px; -fx-padding: 3 8;");
-        copyButton.setOnAction(e -> {
-            ClipboardContent clip = new ClipboardContent();
-            clip.putString(text);
-            Clipboard.getSystemClipboard().setContent(clip);
-        });
-
-        HBox copyRow = new HBox(copyButton);
-        copyRow.setAlignment(isUser ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
-
-        VBox bubble = new VBox(8, content, copyRow);
-        bubble.setMaxWidth(600);
-        bubble.setFocusTraversable(false);
+        StackPane bubble = new StackPane(label);
         bubble.setStyle("-fx-background-color: " + bg + "; -fx-background-radius: 12; -fx-padding: 10 14;");
+        bubble.setMaxWidth(600);
 
-        ContextMenu cm = new ContextMenu();
-        if (isUser && node.getUserContent() != null && !node.getUserContent().isBlank()) {
-            MenuItem editItem = new MenuItem("Edit & Resend");
-            editItem.setOnAction(e -> editAndResend(node));
-            cm.getItems().add(editItem);
-        }
-        MenuItem insertItem = new MenuItem("Insert custom pair");
-        insertItem.setOnAction(e -> insertCustomPair(node));
-        cm.getItems().add(insertItem);
-        bubble.setOnContextMenuRequested(e -> cm.show(bubble, e.getScreenX(), e.getScreenY()));
-
-        HBox wrapper = new HBox(bubble);
-        wrapper.setAlignment(isUser ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
-        wrapper.setPadding(new Insets(2, 16, 2, 16));
-        wrapper.setFocusTraversable(false);
-        return wrapper;
-    }
-
-    /** Edit a user message and resend as a new sibling (creates a branch). */
-    private void editAndResend(AiMessage node) {
-        TextInputDialog dialog = new TextInputDialog(node.getUserContent());
-        dialog.setTitle("Edit & Resend");
-        dialog.setHeaderText("Edit your message");
-        dialog.showAndWait().ifPresent(newText -> {
-            if (newText.isBlank()) return;
-
-            AiMessage sibling = new AiMessage(makeTitle());
-            sibling.setUserContent(newText);
-
-            AiMessage parent = findParentInSession(node);
-            if (parent != null) {
-                parent.getChildren().add(sibling);
-                if (parent.getChildren().size() >= 2) {
-                    branchSelections.put(parent.getId(), sibling.getId());
-                }
-            } else {
-                int idx = currentSession.getRootMessages().indexOf(node);
-                currentSession.getRootMessages().add(idx + 1, sibling);
+        // Icon buttons (below bubble)
+        HBox bar = new HBox();
+        bar.setAlignment(isUser ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+        bar.setPadding(new Insets(2, 0, 0, 0));
+        if (isUser) {
+            // User: Insert → Edit → Copy
+            bar.getChildren().add(iconBtn(IconButtons.insertButton(c), e -> insertCustom(node)));
+            if (node.getUserContent() != null && !node.getUserContent().isBlank()) {
+                bar.getChildren().add(iconBtn(IconButtons.editButton(c), e -> editAndResend(node)));
             }
-
-            refreshNavTree();
-            refreshMessages();
-            scrollToBottom();
-
-            List<AiMessage> context = buildSelectedPath();
-            List<String> messagesJson = flattenMessages(context);
-            AiConfig config = appState.getAiConfig();
-            String systemPrompt = "You are a professional writing assistant. Help the user write and improve their novel. "
-                    + "Provide creative suggestions, plot ideas, character development, and editing advice.";
-            new Thread(() -> {
-                try {
-                    String response = aiClient.chat(config, systemPrompt, messagesJson);
-                    Platform.runLater(() -> {
-                        sibling.setAssistantContent(response);
-                        store.save(currentSession);
-                        refreshNavTree();
-                        refreshMessages();
-                        scrollToBottom();
-                    });
-                } catch (Exception e) {
-                    Platform.runLater(() -> {
-                        String msg = e.getMessage();
-                        sibling.setAssistantContent("[Error] " + (msg != null ? msg : "unknown"));
-                        store.save(currentSession);
-                        refreshNavTree();
-                        refreshMessages();
-                    });
-                }
-            }).start();
-        });
-    }
-
-    /** Insert a custom user+assistant pair as a child of the given node. */
-    private void insertCustomPair(AiMessage node) {
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Insert Custom Pair");
-
-        TextArea userField = new TextArea();
-        userField.setPromptText("User message");
-        userField.setPrefRowCount(3);
-        TextArea asstField = new TextArea();
-        asstField.setPromptText("Assistant response");
-        asstField.setPrefRowCount(3);
-        VBox content = new VBox(8, new Label("User:"), userField, new Label("Assistant:"), asstField);
-        dialog.getDialogPane().setContent(content);
-        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
-
-        dialog.showAndWait().ifPresent(btn -> {
-            if (btn != ButtonType.OK) return;
-            String userText = userField.getText();
-            String asstText = asstField.getText();
-            if (userText.isBlank() && asstText.isBlank()) return;
-
-            AiMessage custom = new AiMessage(makeTitle());
-            if (!userText.isBlank()) custom.setUserContent(userText);
-            if (!asstText.isBlank()) custom.setAssistantContent(asstText);
-            node.getChildren().add(custom);
-
-            store.save(currentSession);
-            refreshNavTree();
-            refreshMessages();
-        });
-    }
-
-    /** Find the parent of a node in the session's message tree (reference equality). */
-    private AiMessage findParentInSession(AiMessage target) {
-        if (currentSession == null) return null;
-        for (AiMessage root : currentSession.getRootMessages()) {
-            if (root == target) return null;
-            AiMessage found = findParentInSession(root, target);
-            if (found != null) return found;
+            bar.getChildren().add(iconBtn(IconButtons.copyButton(c), e -> {
+                ClipboardContent cc = new ClipboardContent();
+                cc.putString(text);
+                Clipboard.getSystemClipboard().setContent(cc);
+            }));
+        } else {
+            // Assistant: Copy → Insert
+            bar.getChildren().add(iconBtn(IconButtons.copyButton(c), e -> {
+                ClipboardContent cc = new ClipboardContent();
+                cc.putString(text);
+                Clipboard.getSystemClipboard().setContent(cc);
+            }));
+            bar.getChildren().add(iconBtn(IconButtons.insertButton(c), e -> insertCustom(node)));
         }
-        return null;
+
+        VBox col = new VBox(0, bubble, bar);
+
+        HBox wrap = new HBox(col);
+        wrap.setAlignment(isUser ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+        wrap.setPadding(new Insets(2, 16, 2, 16));
+        HBox.setHgrow(col, Priority.NEVER);
+        return wrap;
     }
 
-    private AiMessage findParentInSession(AiMessage node, AiMessage target) {
-        for (AiMessage child : node.getChildren()) {
-            if (child == target) return node;
-            AiMessage found = findParentInSession(child, target);
-            if (found != null) return found;
-        }
-        return null;
+    /** Wrap an icon button with hover dimming. */
+    private static Button iconBtn(Button btn, javafx.event.EventHandler<javafx.event.ActionEvent> handler) {
+        btn.setOpacity(0.35);
+        btn.setOnMouseEntered(e -> btn.setOpacity(1));
+        btn.setOnMouseExited(e -> btn.setOpacity(0.35));
+        btn.setOnAction(handler);
+        return btn;
     }
 
     // ════════════════════════════════════════
     //  Send Message
     // ════════════════════════════════════════
 
-    private void sendMessage() {
+    private void send() {
         String text = inputField.getText();
-        if (text == null || text.isBlank()) return;
-        if (currentSession == null) return;
+        if (text == null || text.isBlank() || currentSession == null) return;
 
         inputField.clear();
         inputField.setDisable(true);
         sendButton.setDisable(true);
-        sendButton.setText("AI思考中...");
+        sendButton.setText("AI thinking…");
 
-        // Build context from the currently selected branch path
-        List<AiMessage> contextPath = buildSelectedPath();
-
-        AiMessage roundNode = new AiMessage(makeTitle());
-        roundNode.setUserContent(text);
-        if (!contextPath.isEmpty()) {
-            AiMessage parent = contextPath.getLast();
-            parent.getChildren().add(roundNode);
-            if (parent.getChildren().size() >= 2) {
-                branchSelections.put(parent.getId(), roundNode.getId());
-            }
+        List<AiMessage> ctx = selectedPath();
+        AiMessage node = new AiMessage(makeTitle());
+        node.setUserContent(text);
+        if (!ctx.isEmpty()) {
+            AiMessage p = ctx.getLast();
+            p.getChildren().add(node);
+            if (p.getChildren().size() >= 2) branchSel.put(p.getId(), node.getId());
         } else {
-            currentSession.getRootMessages().add(roundNode);
+            currentSession.getRootMessages().add(node);
         }
 
-        String nodeId = roundNode.getId();
+        String nid = node.getId();
+        List<AiMessage> apiCtx = new ArrayList<>(ctx);
+        apiCtx.add(node);
 
-        List<AiMessage> apiContext = new ArrayList<>(contextPath);
-        apiContext.add(roundNode);
-        refreshNavTree();
+        refreshNav();
         refreshMessages();
         scrollToBottom();
 
-        final List<String> messagesJson = flattenMessages(apiContext);
+        List<String> json = flatten(apiCtx);
+        AiConfig cfg = appState.getAiConfig();
+        String sys = "You are a professional writing assistant. Help the user write and improve their novel. "
+                + "Provide creative suggestions, plot ideas, character development, and editing advice.";
+
         new Thread(() -> {
             try {
-                AiConfig config = appState.getAiConfig();
-                String systemPrompt = "You are a professional writing assistant. Help the user write and improve their novel. "
-                        + "Provide creative suggestions, plot ideas, character development, and editing advice.";
-                String responseText = aiClient.chat(config, systemPrompt, messagesJson);
-
+                String resp = aiClient.chat(cfg, sys, json);
                 Platform.runLater(() -> {
-                    roundNode.setAssistantContent(responseText);
+                    node.setAssistantContent(resp);
                     store.save(currentSession);
-                    selectAiResponseNode(nodeId);
+                    refreshNav();
+                    refreshMessages();
+                    scrollToBottom();
                     inputField.setDisable(false);
                     sendButton.setDisable(false);
                     sendButton.setText("Send");
                 });
             } catch (Exception e) {
                 Platform.runLater(() -> {
-                    String errorMsg = e.getMessage();
-                    if (errorMsg != null && (errorMsg.contains("401") || errorMsg.contains("API Key")
-                            || errorMsg.contains("required"))) {
-                        errorMsg = "API configuration error. Please check Settings > AI Config.";
-                    }
-                    roundNode.setAssistantContent("[Error] " + errorMsg);
+                    String m = e.getMessage();
+                    node.setAssistantContent("[Error] " + (m != null ? m : "unknown"));
                     store.save(currentSession);
-                    selectAiResponseNode(nodeId);
+                    refreshNav();
+                    refreshMessages();
+                    scrollToBottom();
                     inputField.setDisable(false);
                     sendButton.setDisable(false);
                     sendButton.setText("Send");
@@ -766,19 +566,122 @@ public class AiConversationView {
         }).start();
     }
 
-    /** Flatten conversation nodes into JSON message objects for the API. */
-    private List<String> flattenMessages(List<AiMessage> nodes) {
-        List<String> result = new ArrayList<>();
-        for (AiMessage node : nodes) {
-            if (node.getUserContent() != null && !node.getUserContent().isBlank()) {
-                result.add("{\"role\":\"user\",\"content\":" + jsonStr(node.getUserContent()) + "}");
+    // ════════════════════════════════════════
+    //  Branch Operations
+    // ════════════════════════════════════════
+
+    private void editAndResend(AiMessage node) {
+        TextInputDialog d = new TextInputDialog(node.getUserContent());
+        d.setTitle("Edit & Resend");
+        d.showAndWait().ifPresent(newText -> {
+            if (newText.isBlank()) return;
+
+            AiMessage sib = new AiMessage(makeTitle());
+            sib.setUserContent(newText);
+
+            AiMessage parent = findParent(node);
+            if (parent != null) {
+                parent.getChildren().add(sib);
+                if (parent.getChildren().size() >= 2) branchSel.put(parent.getId(), sib.getId());
+            } else {
+                int idx = currentSession.getRootMessages().indexOf(node);
+                currentSession.getRootMessages().add(idx + 1, sib);
             }
-            if (node.getAssistantContent() != null && !node.getAssistantContent().isBlank()
-                    && !node.getAssistantContent().startsWith("[Error]")) {
-                result.add("{\"role\":\"assistant\",\"content\":" + jsonStr(node.getAssistantContent()) + "}");
+
+            refreshNav();
+            refreshMessages();
+            scrollToBottom();
+
+            List<AiMessage> ctx = selectedPath();
+            List<String> json = flatten(ctx);
+            AiConfig cfg = appState.getAiConfig();
+            String sys = "You are a professional writing assistant. Help the user write and improve their novel. "
+                    + "Provide creative suggestions, plot ideas, character development, and editing advice.";
+            new Thread(() -> {
+                try {
+                    String resp = aiClient.chat(cfg, sys, json);
+                    Platform.runLater(() -> {
+                        sib.setAssistantContent(resp);
+                        store.save(currentSession);
+                        refreshNav();
+                        refreshMessages();
+                        scrollToBottom();
+                    });
+                } catch (Exception e) {
+                    Platform.runLater(() -> {
+                        String m = e.getMessage();
+                        sib.setAssistantContent("[Error] " + (m != null ? m : "unknown"));
+                        store.save(currentSession);
+                        refreshNav();
+                        refreshMessages();
+                    });
+                }
+            }).start();
+        });
+    }
+
+    private void insertCustom(AiMessage node) {
+        Dialog<ButtonType> d = new Dialog<>();
+        d.setTitle("Insert Custom Pair");
+        TextArea uf = new TextArea();
+        uf.setPromptText("User message");
+        uf.setPrefRowCount(3);
+        TextArea af = new TextArea();
+        af.setPromptText("Assistant response");
+        af.setPrefRowCount(3);
+        d.getDialogPane().setContent(new VBox(8, new Label("User:"), uf, new Label("Assistant:"), af));
+        d.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        d.showAndWait().ifPresent(btn -> {
+            if (btn != ButtonType.OK) return;
+            String u = uf.getText();
+            String a = af.getText();
+            if (u.isBlank() && a.isBlank()) return;
+            AiMessage c = new AiMessage(makeTitle());
+            if (!u.isBlank()) c.setUserContent(u);
+            if (!a.isBlank()) c.setAssistantContent(a);
+            node.getChildren().add(c);
+            store.save(currentSession);
+            refreshNav();
+            refreshMessages();
+            scrollToBottom();
+        });
+    }
+
+    private AiMessage findParent(AiMessage target) {
+        if (currentSession == null) return null;
+        for (AiMessage r : currentSession.getRootMessages()) {
+            if (r == target) return null;
+            AiMessage f = findParent(r, target);
+            if (f != null) return f;
+        }
+        return null;
+    }
+
+    private AiMessage findParent(AiMessage n, AiMessage target) {
+        for (AiMessage c : n.getChildren()) {
+            if (c == target) return n;
+            AiMessage f = findParent(c, target);
+            if (f != null) return f;
+        }
+        return null;
+    }
+
+    // ════════════════════════════════════════
+    //  Helpers
+    // ════════════════════════════════════════
+
+    private List<String> flatten(List<AiMessage> nodes) {
+        List<String> r = new ArrayList<>();
+        for (AiMessage n : nodes) {
+            if (n.getUserContent() != null && !n.getUserContent().isBlank()) {
+                r.add("{\"role\":\"user\",\"content\":" + jsonStr(n.getUserContent()) + "}");
+            }
+            if (n.getAssistantContent() != null && !n.getAssistantContent().isBlank()
+                    && !n.getAssistantContent().startsWith("[Error]")) {
+                r.add("{\"role\":\"assistant\",\"content\":" + jsonStr(n.getAssistantContent()) + "}");
             }
         }
-        return result;
+        return r;
     }
 
     private static String jsonStr(String s) {
@@ -786,28 +689,32 @@ public class AiConversationView {
                 .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\"";
     }
 
-    // ── Node selection after response ──
-
-    private void selectAiResponseNode(String nodeId) {
-        refreshNavTree();
-        refreshMessages();
-        scrollToBottom();
-    }
-
-    private TreeItem<AiMessage> findLastChild(TreeItem<AiMessage> parent, String id) {
-        if (parent == null) return null;
-        for (TreeItem<AiMessage> child : parent.getChildren()) {
-            if (child.getValue() != null && child.getValue().getId().equals(id)) return child;
-            TreeItem<AiMessage> found = findLastChild(child, id);
-            if (found != null) return found;
-        }
-        return null;
-    }
-
     private void scrollToBottom() {
-        if (messageScrollPane != null) {
-            messageScrollPane.layout();
-            messageScrollPane.setVvalue(1.0);
-        }
+        if (messageScroll == null) return;
+        pendingBottomScrollPulses = Math.max(pendingBottomScrollPulses, 2);
+        scheduleBottomScroll();
+    }
+
+    private void scheduleBottomScroll() {
+        if (bottomScrollScheduled || pendingBottomScrollPulses <= 0) return;
+        bottomScrollScheduled = true;
+        Platform.runLater(() -> {
+            bottomScrollScheduled = false;
+            if (messageScroll == null) {
+                pendingBottomScrollPulses = 0;
+                return;
+            }
+            messageArea.applyCss();
+            messageArea.layout();
+            messageScroll.applyCss();
+            messageScroll.layout();
+            messageScroll.setVvalue(1.0);
+            pendingBottomScrollPulses--;
+            scheduleBottomScroll();
+        });
+    }
+
+    private static String makeTitle() {
+        return LocalDateTime.now().format(TTL);
     }
 }

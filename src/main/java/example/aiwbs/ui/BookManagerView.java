@@ -483,7 +483,7 @@ public class BookManagerView {
         volume.setStyle("-fx-text-fill: rgba(255,255,255,0.78);");
 
         if (selectedChapter == null) {
-            Label hint = new Label("该分卷没有任何章节");
+            Label hint = new Label("没有任何章节");
             hint.setStyle("-fx-text-fill: rgba(255,255,255,0.40); -fx-font-size: 18px;");
             VBox center = new VBox(hint);
             center.setAlignment(Pos.CENTER);
