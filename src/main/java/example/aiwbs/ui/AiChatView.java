@@ -11,6 +11,7 @@ import example.aiwbs.storage.StateStore;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.geometry.Side;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.control.*;
@@ -51,8 +52,12 @@ public class AiChatView {
     // State
     private AiSession currentSession;
     private final Map<String, String> branchSel = new HashMap<>();
+    private List<AiMessage> currentPath = new ArrayList<>();
     private boolean sessionVis = true;
     private boolean navVis = true;
+    private boolean pathNodeVis = true;
+    private int pathNodeFocusedIdx = -1;
+    private VBox pathNodePanel;
     private Runnable onToggle;
 
     private static final DateTimeFormatter TTL = DateTimeFormatter.ofPattern("yy.MM.dd.HH.mm");
@@ -87,6 +92,16 @@ public class AiChatView {
         if (onToggle != null) onToggle.run();
     }
 
+    public boolean isPathNodeVisible() { return pathNodeVis; }
+
+    public void togglePathNodePanel() {
+        pathNodeVis = !pathNodeVis;
+        pathNodePanel.setVisible(pathNodeVis);
+        pathNodePanel.setManaged(pathNodeVis);
+        refreshLeftBar();
+        if (onToggle != null) onToggle.run();
+    }
+
     // ════════════════════════════════════════
     //  Layout
     // ════════════════════════════════════════
@@ -96,11 +111,12 @@ public class AiChatView {
 
         buildSessionPanel();
         buildNavPanel();
+        buildPathNodePanel();
         BorderPane conv = buildConvPanel();
         leftBar = (VBox) buildLeftBar();
 
         HBox center = new HBox(0);
-        center.getChildren().addAll(leftBar, sessionPanel, navPanel, conv);
+        center.getChildren().addAll(leftBar, sessionPanel, navPanel, pathNodePanel, conv);
         HBox.setHgrow(conv, Priority.ALWAYS);
         root.setCenter(center);
     }
@@ -122,7 +138,12 @@ public class AiChatView {
         ViewUtils.tip(nBtn, "分支导航器", "right");
         nBtn.setOnAction(e -> { toggleNavTree(); refreshLeftBar(); });
 
-        bar.getChildren().addAll(sBtn, nBtn);
+        boolean pVis = pathNodeVis;
+        Button pBtn = pVis ? IconButtons.pathNodeNavigatorActiveButton() : IconButtons.pathNodeNavigatorButton();
+        ViewUtils.tip(pBtn, "对话链", "right");
+        pBtn.setOnAction(e -> { togglePathNodePanel(); refreshLeftBar(); });
+
+        bar.getChildren().addAll(sBtn, nBtn, pBtn);
         return bar;
     }
 
@@ -137,16 +158,20 @@ public class AiChatView {
         Button nBtn = nVis ? IconButtons.branchNavigatorActiveButton() : IconButtons.branchNavigatorButton();
         ViewUtils.tip(nBtn, "分支导航器", "right");
         nBtn.setOnAction(e -> { toggleNavTree(); refreshLeftBar(); });
-        leftBar.getChildren().addAll(sBtn, nBtn);
+        boolean pVis = pathNodeVis;
+        Button pBtn = pVis ? IconButtons.pathNodeNavigatorActiveButton() : IconButtons.pathNodeNavigatorButton();
+        ViewUtils.tip(pBtn, "对话链", "right");
+        pBtn.setOnAction(e -> { togglePathNodePanel(); refreshLeftBar(); });
+        leftBar.getChildren().addAll(sBtn, nBtn, pBtn);
     }
 
     private void buildSessionPanel() {
-        sessionPanel.setPrefWidth(220);
+        sessionPanel.setPrefWidth(200);
         sessionPanel.setMinWidth(0);
         sessionPanel.setPadding(new Insets(12));
         sessionPanel.setStyle("-fx-background-color: #111a34; -fx-border-color: #223055; -fx-border-width: 0 1 0 0;");
 
-        Label title = new Label("Sessions – " + book.getName());
+        Label title = new Label("会话列表 – " + book.getName());
         title.setWrapText(true);
         title.setStyle("-fx-text-fill: #fff; -fx-font-size: 15px; -fx-font-weight: bold;");
 
@@ -159,10 +184,18 @@ public class AiChatView {
     }
 
     private void buildNavPanel() {
-        navPanel.setPrefWidth(240);
+        navPanel.setPrefWidth(200);
         navPanel.setMinWidth(0);
         navPanel.setPadding(new Insets(12));
         navPanel.setStyle("-fx-background-color: #111a34; -fx-border-color: #223055; -fx-border-width: 0 1 0 0;");
+    }
+
+    private void buildPathNodePanel() {
+        pathNodePanel = new VBox(8);
+        pathNodePanel.setPrefWidth(200);
+        pathNodePanel.setMinWidth(0);
+        pathNodePanel.setPadding(new Insets(12));
+        pathNodePanel.setStyle("-fx-background-color: #111a34; -fx-border-color: #223055; -fx-border-width: 0 1 0 0;");
     }
 
     private BorderPane buildConvPanel() {
@@ -290,7 +323,9 @@ public class AiChatView {
     private void selectSession(AiSession s) {
         currentSession = s;
         branchSel.clear();
+        pathNodeFocusedIdx = 0;
         loadSessions();
+        scrollToMessageNode(0);
     }
 
     private void promptNew() {
@@ -337,21 +372,19 @@ public class AiChatView {
 
     private void refreshNav() {
         navPanel.getChildren().clear();
-        Label title = new Label("Branch Navigator");
+        Label title = new Label("分支导航器");
         title.setStyle("-fx-text-fill: #fff; -fx-font-size: 15px; -fx-font-weight: bold;");
         navPanel.getChildren().add(title);
         if (currentSession == null) return;
 
         initDefaults(currentSession.getRootMessages());
+        refreshPath();
 
         VBox list = new VBox(4);
-        List<AiMessage> path = selectedPath();
-        int depth = 0;
-        for (AiMessage n : path) {
+        for (AiMessage n : currentPath) {
             if (n.getChildren().size() >= 2) {
-                list.getChildren().add(buildBranchGroup(n, depth));
+                list.getChildren().add(buildBranchGroup(n));
             }
-            depth++;
         }
         if (list.getChildren().isEmpty()) {
             Label e = new Label("(no branches yet)");
@@ -367,9 +400,130 @@ public class AiChatView {
         navPanel.getChildren().add(sp);
     }
 
-    private Node buildBranchGroup(AiMessage bp, int depth) {
+    // ════════════════════════════════════════
+    //  Path Node Navigator
+    // ════════════════════════════════════════
+
+    private void refreshPathNodePanel() {
+        pathNodePanel.getChildren().clear();
+        Label title = new Label("对话链");
+        title.setStyle("-fx-text-fill: #fff; -fx-font-size: 15px; -fx-font-weight: bold;");
+        pathNodePanel.getChildren().add(title);
+
+        if (currentPath.isEmpty()) {
+            Label e = new Label("(no messages yet)");
+            e.setStyle("-fx-text-fill: rgba(255,255,255,0.35); -fx-font-size: 12px; -fx-padding: 8 0;");
+            pathNodePanel.getChildren().add(e);
+            return;
+        }
+
+        VBox list = new VBox(4);
+        for (int i = 0; i < currentPath.size(); i++) {
+            AiMessage node = currentPath.get(i);
+            int idx = i;
+
+            boolean isActive = pathNodeFocusedIdx == idx;
+
+            String nodeTitle = node.getTitle() == null || node.getTitle().isBlank() ? "(unnamed)" : node.getTitle();
+
+            // 分叉标记：此节点有多个子节点 → "->n"
+            String forkMarker = node.getChildren().size() >= 2 ? "->" + node.getChildren().size() : null;
+
+            // 分支标记：父节点有多个子节点 → "位置/总数"
+            String branchMarker = null;
+            if (i > 0) {
+                AiMessage parent = currentPath.get(i - 1);
+                int total = parent.getChildren().size();
+                if (total >= 2) {
+                    int pos = parent.getChildren().indexOf(node) + 1;
+                    branchMarker = pos + "/" + total;
+                }
+            }
+
+            String btnBg = isActive ? "#d7bb74" : "transparent";
+            String btnFg = isActive ? "#11182d" : "#aab";
+            String btnBd = isActive ? "#d7bb74" : "#334";
+            String markFg = isActive ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.55)";
+            String btnStyle = "-fx-background-color: " + btnBg + "; -fx-text-fill: " + btnFg
+                    + "; -fx-font-size: 11px; -fx-padding: 4 6; -fx-background-radius: 4;"
+                    + "; -fx-border-color: " + btnBd + "; -fx-border-radius: 4;";
+
+            Button b = new Button();
+            b.setMaxWidth(Double.MAX_VALUE);
+            b.setStyle(btnStyle);
+
+            HBox row = new HBox(6);
+            row.setAlignment(Pos.CENTER_LEFT);
+
+            Label titleLbl = new Label(nodeTitle);
+            titleLbl.setStyle("-fx-text-fill: " + btnFg + "; -fx-font-size: 11px;");
+            titleLbl.setPrefWidth(95);
+            titleLbl.setMinWidth(95);
+            titleLbl.setMaxWidth(95);
+            titleLbl.setTextOverrun(OverrunStyle.ELLIPSIS);
+            row.getChildren().add(titleLbl);
+
+            if (forkMarker != null) {
+                Label forkLbl = new Label(forkMarker);
+                forkLbl.setStyle("-fx-text-fill: " + markFg + "; -fx-font-size: 10px;");
+                row.getChildren().add(forkLbl);
+            }
+
+            Region spacer = new Region();
+            HBox.setHgrow(spacer, Priority.ALWAYS);
+            row.getChildren().add(spacer);
+
+            if (branchMarker != null) {
+                Label branchLbl = new Label(branchMarker);
+                branchLbl.setStyle("-fx-text-fill: " + markFg + "; -fx-font-size: 10px;");
+                row.getChildren().add(branchLbl);
+            }
+
+            b.setGraphic(row);
+
+            b.setOnAction(ev -> {
+                pathNodeFocusedIdx = idx;
+                refreshPathNodePanel();
+                scrollToMessageNode(idx);
+            });
+
+            ContextMenu ctxMenu = new ContextMenu();
+            MenuItem renameItem = new MenuItem("重命名标题");
+            renameItem.setOnAction(ev -> renameTurnTitle(node));
+            MenuItem deleteItem = new MenuItem("删除");
+            deleteItem.setOnAction(ev -> deleteTurn(node));
+            ctxMenu.getItems().addAll(renameItem, deleteItem);
+            b.setOnContextMenuRequested(ev -> {
+                ctxMenu.show(b, Side.RIGHT, 0, 0);
+                ev.consume();
+            });
+
+            list.getChildren().add(b);
+        }
+
+        ScrollPane sp = new ScrollPane(list);
+        sp.setFitToWidth(true);
+        sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        sp.setStyle("-fx-background: transparent; -fx-background-color: transparent; -fx-border-color: transparent;");
+        VBox.setVgrow(sp, Priority.ALWAYS);
+        pathNodePanel.getChildren().add(sp);
+    }
+
+    private void scrollToMessageNode(int index) {
+        Platform.runLater(() -> {
+            if (index < 0 || index >= messageArea.getChildren().size()) return;
+            Node target = messageArea.getChildren().get(index);
+            double y = target.getBoundsInParent().getMinY();
+            double viewH = messageScroll.getViewportBounds().getHeight();
+            double contentH = messageArea.getHeight();
+            if (contentH <= viewH) return;
+            messageScroll.setVvalue(y / (contentH - viewH));
+        });
+    }
+
+    private Node buildBranchGroup(AiMessage bp) {
         VBox g = new VBox(3);
-        g.setPadding(new Insets(6, 2, 6, 2 + depth * 14));
+        g.setPadding(new Insets(6, 2, 6, 2));
 
         Label l = new Label(bp.getTitle() == null || bp.getTitle().isBlank() ? "(branch)" : bp.getTitle());
         l.setStyle("-fx-text-fill: #d7bb74; -fx-font-size: 11px; -fx-font-weight: bold;");
@@ -390,8 +544,10 @@ public class AiChatView {
                     : "-fx-background-color: transparent; -fx-text-fill: #aab; -fx-font-size: 11px; -fx-padding: 2 6; -fx-border-color: #334; -fx-border-radius: 4;");
             b.setOnAction(ev -> {
                 branchSel.put(bpId, cid);
+                pathNodeFocusedIdx = 0;
                 refreshNav();
                 refreshMessages();
+                scrollToMessageNode(0);
             });
             g.getChildren().add(b);
         }
@@ -420,6 +576,10 @@ public class AiChatView {
             followPath(r, p);
         }
         return p;
+    }
+
+    private void refreshPath() {
+        currentPath = selectedPath();
     }
 
     private void followPath(AiMessage n, List<AiMessage> out) {
@@ -456,14 +616,16 @@ public class AiChatView {
         inputField.setDisable(false);
         sendButton.setDisable(false);
 
-        List<AiMessage> path = selectedPath();
+        List<AiMessage> path = currentPath;
         if (path.isEmpty()) {
             Label h = new Label("Type a message below to start.");
             h.setStyle("-fx-text-fill: rgba(255,255,255,0.40); -fx-font-size: 14px; -fx-padding: 20;");
             h.setWrapText(true);
             messageArea.getChildren().add(h);
         } else {
-            for (AiMessage n : path) {
+            for (int i = 0; i < path.size(); i++) {
+                AiMessage n = path.get(i);
+
                 Label hdr = new Label(n.getTitle() == null || n.getTitle().isBlank() ? "(unnamed)" : n.getTitle());
                 hdr.setStyle("-fx-text-fill: #d7bb74; -fx-font-size: 13px; -fx-font-weight: bold; -fx-padding: 4 0 2 0;");
 
@@ -472,6 +634,7 @@ public class AiChatView {
 
                 VBox block = new VBox(6);
                 block.getChildren().addAll(hdr, sep);
+                block.setUserData(i);
 
                 if (n.getUserContent() != null && !n.getUserContent().isBlank()) {
                     block.getChildren().add(createBubble(n.getUserContent(), true, n));
@@ -482,6 +645,7 @@ public class AiChatView {
                 messageArea.getChildren().add(block);
             }
         }
+        refreshPathNodePanel();
     }
 
     private Node createBubble(String text, boolean isUser, AiMessage node) {
@@ -502,9 +666,9 @@ public class AiChatView {
         bar.setAlignment(isUser ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
         bar.setPadding(new Insets(2, 0, 0, 0));
         if (isUser) {
-            bar.getChildren().add(iconBtn(IconButtons.insertButton(c), e -> insertCustom(node)));
+            bar.getChildren().add(iconBtn(IconButtons.insertButton(c), e -> insertCustomTurn(node)));
             if (node.getUserContent() != null && !node.getUserContent().isBlank()) {
-                bar.getChildren().add(iconBtn(IconButtons.editButton(c), e -> editAndResend(node)));
+                bar.getChildren().add(iconBtn(IconButtons.editButton(c), e -> editAndResendTurn(node)));
             }
             bar.getChildren().add(iconBtn(IconButtons.copyButton(c), e -> {
                 ClipboardContent cc = new ClipboardContent();
@@ -517,7 +681,7 @@ public class AiChatView {
                 cc.putString(text);
                 Clipboard.getSystemClipboard().setContent(cc);
             }));
-            bar.getChildren().add(iconBtn(IconButtons.insertButton(c), e -> insertCustom(node)));
+            bar.getChildren().add(iconBtn(IconButtons.insertButton(c), e -> insertCustomTurn(node)));
         }
 
         VBox col = new VBox(0, bubble, bar);
@@ -550,7 +714,7 @@ public class AiChatView {
         sendButton.setDisable(true);
         sendButton.setText("AI thinking…");
 
-        List<AiMessage> ctx = selectedPath();
+        List<AiMessage> ctx = new ArrayList<>(currentPath);
         AiMessage node = new AiMessage(makeTitle());
         node.setUserContent(text);
         if (!ctx.isEmpty()) {
@@ -561,6 +725,8 @@ public class AiChatView {
             currentSession.getRootMessages().add(node);
         }
 
+        refreshPath();
+        pathNodeFocusedIdx = currentPath.size() - 1;
         String nid = node.getId();
         List<AiMessage> apiCtx = new ArrayList<>(ctx);
         apiCtx.add(node);
@@ -607,7 +773,7 @@ public class AiChatView {
     //  Branch Operations
     // ════════════════════════════════════════
 
-    private void editAndResend(AiMessage node) {
+    private void editAndResendTurn(AiMessage node) {
         TextInputDialog d = new TextInputDialog(node.getUserContent());
         d.setTitle("Edit & Resend");
         d.showAndWait().ifPresent(newText -> {
@@ -625,11 +791,13 @@ public class AiChatView {
                 currentSession.getRootMessages().add(idx + 1, sib);
             }
 
+            refreshPath();
+            pathNodeFocusedIdx = currentPath.size() - 1;
             refreshNav();
             refreshMessages();
             scrollToBottom();
 
-            List<AiMessage> ctx = selectedPath();
+            List<AiMessage> ctx = currentPath;
             List<String> json = flatten(ctx);
             AiConfig cfg = appState.getAiConfig();
             String sys = "You are a professional writing assistant. Help the user write and improve their novel. "
@@ -657,7 +825,7 @@ public class AiChatView {
         });
     }
 
-    private void insertCustom(AiMessage node) {
+    private void insertCustomTurn(AiMessage node) {
         Dialog<ButtonType> d = new Dialog<>();
         d.setTitle("Insert Custom Pair");
         TextArea uf = new TextArea();
@@ -677,10 +845,50 @@ public class AiChatView {
             if (!u.isBlank()) c.setUserContent(u);
             if (!a.isBlank()) c.setAssistantContent(a);
             node.getChildren().add(c);
+            if (node.getChildren().size() >= 2) branchSel.put(node.getId(), c.getId());
             store.save(currentSession);
             refreshNav();
+            pathNodeFocusedIdx = currentPath.size() - 1;
             refreshMessages();
             scrollToBottom();
+        });
+    }
+
+    // ════════════════════════════════════════
+    //  Turn Operations
+    // ════════════════════════════════════════
+
+    private void deleteTurn(AiMessage node) {
+        if (currentSession == null) return;
+        AiMessage parent = findParent(node);
+        if (parent != null) {
+            parent.getChildren().remove(node);
+            if (parent.getChildren().size() <= 1) {
+                branchSel.remove(parent.getId());
+            }
+        } else {
+            currentSession.getRootMessages().remove(node);
+        }
+        branchSel.remove(node.getId());
+        store.save(currentSession);
+        refreshNav();
+        pathNodeFocusedIdx = Math.min(pathNodeFocusedIdx, currentPath.size() - 1);
+        if (pathNodeFocusedIdx < 0 && !currentPath.isEmpty()) pathNodeFocusedIdx = 0;
+        refreshMessages();
+    }
+
+    private void renameTurnTitle(AiMessage node) {
+        if (currentSession == null) return;
+        TextInputDialog d = new TextInputDialog(node.getTitle());
+        d.setTitle("Rename Turn");
+        d.setHeaderText("New name for this turn:");
+        d.showAndWait().ifPresent(name -> {
+            if (!name.isBlank()) {
+                node.setTitle(name);
+                store.save(currentSession);
+                refreshNav();
+                refreshMessages();
+            }
         });
     }
 
