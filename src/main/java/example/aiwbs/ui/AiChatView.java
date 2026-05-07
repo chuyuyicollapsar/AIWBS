@@ -1,6 +1,11 @@
 package example.aiwbs.ui;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import example.aiwbs.ai.AiClient;
+import example.aiwbs.ai.ToolDefinitions;
 import example.aiwbs.model.AiConfig;
 import example.aiwbs.model.AiMessage;
 import example.aiwbs.model.AiSession;
@@ -727,7 +732,6 @@ public class AiChatView {
 
         refreshPath();
         pathNodeFocusedIdx = currentPath.size() - 1;
-        String nid = node.getId();
         List<AiMessage> apiCtx = new ArrayList<>(ctx);
         apiCtx.add(node);
 
@@ -735,14 +739,18 @@ public class AiChatView {
         refreshMessages();
         scrollToBottom();
 
-        List<String> json = flatten(apiCtx);
+        List<String> messages = flatten(apiCtx);
         AiConfig cfg = appState.getAiConfig();
-        String sys = "You are a professional writing assistant. Help the user write and improve their novel. "
+        String sys = "You are a professional writing assistant. You have access to the user's book via tools (get_table_of_contents, "
+                + "get_outline_tree, get_volume_outline, get_chapter_outline, get_chapter_content). "
+                + "First get the table of contents or outline to understand the book, then drill into details as needed. "
                 + "Provide creative suggestions, plot ideas, character development, and editing advice.";
+
+        String toolsJson = ToolDefinitions.getToolsJson();
 
         new Thread(() -> {
             try {
-                String resp = aiClient.chat(cfg, sys, json);
+                String resp = callWithTools(cfg, sys, messages, toolsJson, 0);
                 Platform.runLater(() -> {
                     node.setAssistantContent(resp);
                     store.save(currentSession);
@@ -768,6 +776,64 @@ public class AiChatView {
             }
         }).start();
     }
+
+    /**
+     * 带工具调用的递归对话循环，最多 10 轮。
+     */
+    private String callWithTools(AiConfig cfg, String sys, List<String> messages,
+                                  String toolsJson, int depth) throws Exception {
+        if (depth > 10) return "[Error] Tool call loop exceeded max depth";
+
+        String resp = aiClient.chatRaw(cfg, sys, messages, toolsJson);
+        JsonObject root = JsonParser.parseString(resp).getAsJsonObject();
+        JsonObject choice = root.getAsJsonArray("choices").get(0).getAsJsonObject();
+        String finishReason = choice.get("finish_reason").getAsString();
+
+        if (!"tool_calls".equals(finishReason)) {
+            JsonElement contentEl = choice.getAsJsonObject("message").get("content");
+            return contentEl == null || contentEl.isJsonNull() ? "" : contentEl.getAsString();
+        }
+
+        // 处理 tool_calls：将 assistant 消息加入对话
+        JsonObject msg = choice.getAsJsonObject("message");
+        messages.add(msg.toString());
+
+        JsonArray toolCalls = msg.getAsJsonArray("tool_calls");
+        for (JsonElement tc : toolCalls) {
+            JsonObject toolCall = tc.getAsJsonObject();
+            String toolCallId = toolCall.get("id").getAsString();
+            String funcName = toolCall.getAsJsonObject("function").get("name").getAsString();
+            String argsStr = toolCall.getAsJsonObject("function").get("arguments").getAsString();
+            String result = executeTool(funcName, argsStr);
+            messages.add("{\"role\":\"tool\",\"tool_call_id\":\"" + toolCallId
+                    + "\",\"content\":" + jsonStr(result) + "}");
+        }
+
+        return callWithTools(cfg, sys, messages, toolsJson, depth + 1);
+    }
+
+    /**
+     * 执行书籍工具调用，返回结果字符串。
+     */
+    private String executeTool(String name, String argsJson) {
+        try {
+            JsonObject args = JsonParser.parseString(argsJson).getAsJsonObject();
+            return switch (name) {
+                case "get_table_of_contents" -> book.getTableOfContents();
+                case "get_outline_tree" -> book.getOutlineTreeString();
+                case "get_volume_outline" ->
+                    book.getVolumeOutline(args.get("vol_index").getAsInt());
+                case "get_chapter_outline" ->
+                    book.getChapterOutline(args.get("vol_index").getAsInt(), args.get("ch_index").getAsInt());
+                case "get_chapter_content" ->
+                    book.getChapterContent(args.get("vol_index").getAsInt(), args.get("ch_index").getAsInt());
+                default -> "[Error] Unknown tool: " + name;
+            };
+        } catch (Exception e) {
+            return "[Error executing " + name + "] " + e.getMessage();
+        }
+    }
+
 
     // ════════════════════════════════════════
     //  Branch Operations
@@ -800,11 +866,14 @@ public class AiChatView {
             List<AiMessage> ctx = currentPath;
             List<String> json = flatten(ctx);
             AiConfig cfg = appState.getAiConfig();
-            String sys = "You are a professional writing assistant. Help the user write and improve their novel. "
+            String sys = "You are a professional writing assistant. You have access to the user's book via tools (get_table_of_contents, "
+                    + "get_outline_tree, get_volume_outline, get_chapter_outline, get_chapter_content). "
+                    + "First get the table of contents or outline to understand the book, then drill into details as needed. "
                     + "Provide creative suggestions, plot ideas, character development, and editing advice.";
+            String toolsJson = ToolDefinitions.getToolsJson();
             new Thread(() -> {
                 try {
-                    String resp = aiClient.chat(cfg, sys, json);
+                    String resp = callWithTools(cfg, sys, json, toolsJson, 0);
                     Platform.runLater(() -> {
                         sib.setAssistantContent(resp);
                         store.save(currentSession);

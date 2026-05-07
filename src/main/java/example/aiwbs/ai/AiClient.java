@@ -204,10 +204,19 @@ public class AiClient {
     // ════════════════════════════════════════
 
     public String chat(AiConfig config, String systemPrompt, List<String> messageJsonObjects) throws Exception {
+        String raw = chatRaw(config, systemPrompt, messageJsonObjects, null);
+        return extractOpenAiContent(raw);
+    }
+
+    /**
+     * 发送聊天请求（支持 tools），返回 API 原始响应体（JSON）。
+     * toolsJson 为 null 时不发送 tools 参数。
+     */
+    public String chatRaw(AiConfig config, String systemPrompt,
+                          List<String> messageJsonObjects, String toolsJson) throws Exception {
         String apiKey = config.effectiveApiKey();
         String modelId = config.effectiveModelId();
         String baseUrl = config.effectiveBaseUrl();
-
         validateNotBlank(apiKey, "API Key");
         validateNotBlank(modelId, "Model ID");
         validateNotBlank(baseUrl, "Base URL");
@@ -223,8 +232,14 @@ public class AiClient {
             sep = ",";
         }
 
-        String body = "{\"model\":\"" + escapeJson(modelId) + "\",\"messages\":["
-                + msgJson + "],\"temperature\":0.7}";
+        String body;
+        if (toolsJson != null && !toolsJson.isBlank()) {
+            body = "{\"model\":\"" + escapeJson(modelId) + "\",\"messages\":["
+                    + msgJson + "],\"temperature\":0.7,\"tools\":" + toolsJson + "}";
+        } else {
+            body = "{\"model\":\"" + escapeJson(modelId) + "\",\"messages\":["
+                    + msgJson + "],\"temperature\":0.7}";
+        }
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(chatCompletionsUrl(baseUrl)))
@@ -238,7 +253,7 @@ public class AiClient {
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             throw new IllegalStateException("HTTP " + response.statusCode() + ": " + trim(response.body()));
         }
-        return extractOpenAiContent(response.body());
+        return response.body();
     }
 
     private String toJsonString(String value) {
