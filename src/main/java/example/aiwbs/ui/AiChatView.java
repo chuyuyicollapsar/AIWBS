@@ -25,7 +25,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class AiConversationView {
+/**
+ * AI聊天会话界面。
+ */
+public class AiChatView {
     private final BorderPane root = new BorderPane();
     private final AiSessionStore store;
     private final AppState appState;
@@ -37,6 +40,7 @@ public class AiConversationView {
     private final VBox sessionPanel = new VBox(8);
     private final VBox navPanel = new VBox(8);
     private final VBox messageArea = new VBox(12);
+    private VBox leftBar;
     private ScrollPane messageScroll;
     private TextArea inputField;
     private Button sendButton;
@@ -46,14 +50,14 @@ public class AiConversationView {
 
     // State
     private AiSession currentSession;
-    private final Map<String, String> branchSel = new HashMap<>(); // branch point → selected child
+    private final Map<String, String> branchSel = new HashMap<>();
     private boolean sessionVis = true;
     private boolean navVis = true;
     private Runnable onToggle;
 
     private static final DateTimeFormatter TTL = DateTimeFormatter.ofPattern("yy.MM.dd.HH.mm");
 
-    public AiConversationView(AppState appState, StateStore stateStore, Book book) {
+    public AiChatView(AppState appState, StateStore stateStore, Book book) {
         this.appState = appState;
         this.stateStore = stateStore;
         this.book = book;
@@ -71,6 +75,7 @@ public class AiConversationView {
         sessionVis = !sessionVis;
         sessionPanel.setVisible(sessionVis);
         sessionPanel.setManaged(sessionVis);
+        refreshLeftBar();
         if (onToggle != null) onToggle.run();
     }
 
@@ -78,6 +83,7 @@ public class AiConversationView {
         navVis = !navVis;
         navPanel.setVisible(navVis);
         navPanel.setManaged(navVis);
+        refreshLeftBar();
         if (onToggle != null) onToggle.run();
     }
 
@@ -91,11 +97,47 @@ public class AiConversationView {
         buildSessionPanel();
         buildNavPanel();
         BorderPane conv = buildConvPanel();
+        leftBar = (VBox) buildLeftBar();
 
         HBox center = new HBox(0);
-        center.getChildren().addAll(sessionPanel, navPanel, conv);
+        center.getChildren().addAll(leftBar, sessionPanel, navPanel, conv);
         HBox.setHgrow(conv, Priority.ALWAYS);
         root.setCenter(center);
+    }
+
+    /** Vertical left bar with session and nav-tree toggle buttons. */
+    private Parent buildLeftBar() {
+        VBox bar = new VBox(6);
+        bar.setPadding(new Insets(8, 4, 8, 4));
+        bar.setStyle("-fx-background-color: #111a34; -fx-border-color: #223055; -fx-border-width: 0 1 0 0;");
+        bar.setAlignment(javafx.geometry.Pos.TOP_CENTER);
+
+        boolean sVis = sessionVis;
+        Button sBtn = sVis ? IconButtons.sessionToggleActiveButton() : IconButtons.sessionToggleButton();
+        ViewUtils.tip(sBtn, "会话列表", "right");
+        sBtn.setOnAction(e -> { toggleSessionPanel(); refreshLeftBar(); });
+
+        boolean nVis = navVis;
+        Button nBtn = nVis ? IconButtons.navTreeToggleActiveButton() : IconButtons.navTreeToggleButton();
+        ViewUtils.tip(nBtn, "对话树", "right");
+        nBtn.setOnAction(e -> { toggleNavTree(); refreshLeftBar(); });
+
+        bar.getChildren().addAll(sBtn, nBtn);
+        return bar;
+    }
+
+    private void refreshLeftBar() {
+        if (leftBar == null) return;
+        leftBar.getChildren().clear();
+        boolean sVis = sessionVis;
+        Button sBtn = sVis ? IconButtons.sessionToggleActiveButton() : IconButtons.sessionToggleButton();
+        ViewUtils.tip(sBtn, "会话列表", "right");
+        sBtn.setOnAction(e -> { toggleSessionPanel(); refreshLeftBar(); });
+        boolean nVis = navVis;
+        Button nBtn = nVis ? IconButtons.navTreeToggleActiveButton() : IconButtons.navTreeToggleButton();
+        ViewUtils.tip(nBtn, "对话树", "right");
+        nBtn.setOnAction(e -> { toggleNavTree(); refreshLeftBar(); });
+        leftBar.getChildren().addAll(sBtn, nBtn);
     }
 
     private void buildSessionPanel() {
@@ -357,7 +399,6 @@ public class AiConversationView {
         return g;
     }
 
-    /** Ensure every branch point has a default (first child). */
     private void initDefaults(List<AiMessage> roots) {
         for (AiMessage r : roots) initDefaults(r);
     }
@@ -457,12 +498,10 @@ public class AiConversationView {
         bubble.setStyle("-fx-background-color: " + bg + "; -fx-background-radius: 12; -fx-padding: 10 14;");
         bubble.setMaxWidth(600);
 
-        // Icon buttons (below bubble)
         HBox bar = new HBox();
         bar.setAlignment(isUser ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
         bar.setPadding(new Insets(2, 0, 0, 0));
         if (isUser) {
-            // User: Insert → Edit → Copy
             bar.getChildren().add(iconBtn(IconButtons.insertButton(c), e -> insertCustom(node)));
             if (node.getUserContent() != null && !node.getUserContent().isBlank()) {
                 bar.getChildren().add(iconBtn(IconButtons.editButton(c), e -> editAndResend(node)));
@@ -473,7 +512,6 @@ public class AiConversationView {
                 Clipboard.getSystemClipboard().setContent(cc);
             }));
         } else {
-            // Assistant: Copy → Insert
             bar.getChildren().add(iconBtn(IconButtons.copyButton(c), e -> {
                 ClipboardContent cc = new ClipboardContent();
                 cc.putString(text);
@@ -491,7 +529,6 @@ public class AiConversationView {
         return wrap;
     }
 
-    /** Wrap an icon button with hover dimming. */
     private static Button iconBtn(Button btn, javafx.event.EventHandler<javafx.event.ActionEvent> handler) {
         btn.setOpacity(0.35);
         btn.setOnMouseEntered(e -> btn.setOpacity(1));
