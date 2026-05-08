@@ -27,9 +27,11 @@ import javafx.scene.paint.Color;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * AI聊天会话界面。
@@ -66,6 +68,7 @@ public class AiChatView {
     // State
     private AiSession currentSession;
     private final Map<String, String> branchSel = new HashMap<>();
+    private final Set<String> pendingAssistantNodes = new HashSet<>();
     private List<AiMessage> currentPath = new ArrayList<>();
     private boolean sessionVis = true;
     private boolean navVis = true;
@@ -337,6 +340,7 @@ public class AiChatView {
     private void selectSession(AiSession s) {
         currentSession = s;
         branchSel.clear();
+        pendingAssistantNodes.clear();
         pathNodeFocusedIdx = 0;
         loadSessions();
         scrollToMessageNode(0);
@@ -372,6 +376,7 @@ public class AiChatView {
             if (currentSession != null && currentSession.getId().equals(s.getId())) {
                 currentSession = null;
                 branchSel.clear();
+                pendingAssistantNodes.clear();
                 List<AiSession> rem = store.loadAll();
                 if (!rem.isEmpty()) selectSession(rem.getFirst());
                 else { loadSessions(); refreshNav(); refreshMessages(); }
@@ -638,8 +643,7 @@ public class AiChatView {
             return;
         }
         sessionTitle.setText(currentSession.getTitle());
-        inputField.setDisable(false);
-        sendButton.setDisable(false);
+        updateComposerState();
 
         List<AiMessage> path = currentPath;
         if (path.isEmpty()) {
@@ -666,11 +670,20 @@ public class AiChatView {
                 }
                 if (n.getAssistantContent() != null && !n.getAssistantContent().isBlank()) {
                     block.getChildren().add(createBubble(n.getAssistantContent(), false, n));
+                } else if (pendingAssistantNodes.contains(n.getId())) {
+                    block.getChildren().add(createBubble("AI thinking...", false, n));
                 }
                 messageArea.getChildren().add(block);
             }
         }
         refreshPathNodePanel();
+    }
+
+    private void updateComposerState() {
+        boolean disabled = currentSession == null || !pendingAssistantNodes.isEmpty();
+        inputField.setDisable(disabled);
+        sendButton.setDisable(disabled);
+        sendButton.setText(!pendingAssistantNodes.isEmpty() ? "AI thinking..." : "Send");
     }
 
     private Node createBubble(String text, boolean isUser, AiMessage node) {
@@ -735,14 +748,12 @@ public class AiChatView {
         String text = inputField.getText();
         if (text == null || text.isBlank() || currentSession == null) return;
 
-        inputField.clear();
-        inputField.setDisable(true);
-        sendButton.setDisable(true);
-        sendButton.setText("AI thinking…");
-
+        AiSession session = currentSession;
         List<AiMessage> ctx = new ArrayList<>(currentPath);
         AiMessage node = new AiMessage(makeTitle());
         node.setUserContent(text);
+        pendingAssistantNodes.add(node.getId());
+        inputField.clear();
         if (!ctx.isEmpty()) {
             AiMessage p = ctx.getLast();
             p.getChildren().add(node);
@@ -769,25 +780,25 @@ public class AiChatView {
                 String resp = callWithTools(cfg, SYSTEM_PROMPT, messages, toolsJson, 0);
                 Platform.runLater(() -> {
                     node.setAssistantContent(resp);
-                    store.save(currentSession);
-                    refreshNav();
-                    refreshMessages();
-                    scrollToBottom();
-                    inputField.setDisable(false);
-                    sendButton.setDisable(false);
-                    sendButton.setText("Send");
+                    pendingAssistantNodes.remove(node.getId());
+                    store.save(session);
+                    if (isCurrentSession(session)) {
+                        refreshNav();
+                        refreshMessages();
+                        scrollToBottom();
+                    }
                 });
             } catch (Exception e) {
                 Platform.runLater(() -> {
                     String m = e.getMessage();
                     node.setAssistantContent("[Error] " + (m != null ? m : "unknown"));
-                    store.save(currentSession);
-                    refreshNav();
-                    refreshMessages();
-                    scrollToBottom();
-                    inputField.setDisable(false);
-                    sendButton.setDisable(false);
-                    sendButton.setText("Send");
+                    pendingAssistantNodes.remove(node.getId());
+                    store.save(session);
+                    if (isCurrentSession(session)) {
+                        refreshNav();
+                        refreshMessages();
+                        scrollToBottom();
+                    }
                 });
             }
         }).start();
@@ -860,8 +871,10 @@ public class AiChatView {
         d.showAndWait().ifPresent(newText -> {
             if (newText.isBlank()) return;
 
+            AiSession session = currentSession;
             AiMessage sib = new AiMessage(makeTitle());
             sib.setUserContent(newText);
+            pendingAssistantNodes.add(sib.getId());
 
             AiMessage parent = findParent(node);
             if (parent != null) {
@@ -887,18 +900,24 @@ public class AiChatView {
                     String resp = callWithTools(cfg, SYSTEM_PROMPT, json, toolsJson, 0);
                     Platform.runLater(() -> {
                         sib.setAssistantContent(resp);
-                        store.save(currentSession);
-                        refreshNav();
-                        refreshMessages();
-                        scrollToBottom();
+                        pendingAssistantNodes.remove(sib.getId());
+                        store.save(session);
+                        if (isCurrentSession(session)) {
+                            refreshNav();
+                            refreshMessages();
+                            scrollToBottom();
+                        }
                     });
                 } catch (Exception e) {
                     Platform.runLater(() -> {
                         String m = e.getMessage();
                         sib.setAssistantContent("[Error] " + (m != null ? m : "unknown"));
-                        store.save(currentSession);
-                        refreshNav();
-                        refreshMessages();
+                        pendingAssistantNodes.remove(sib.getId());
+                        store.save(session);
+                        if (isCurrentSession(session)) {
+                            refreshNav();
+                            refreshMessages();
+                        }
                     });
                 }
             }).start();
@@ -1019,6 +1038,10 @@ public class AiChatView {
     private static String jsonStr(String s) {
         return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"")
                 .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\"";
+    }
+
+    private boolean isCurrentSession(AiSession session) {
+        return currentSession != null && currentSession.getId().equals(session.getId());
     }
 
     private void scrollToBottom() {
