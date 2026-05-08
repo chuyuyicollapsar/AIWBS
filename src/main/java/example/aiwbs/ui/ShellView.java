@@ -14,8 +14,8 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.MenuItem;
-import javafx.scene.control.TextInputDialog;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
@@ -352,7 +352,7 @@ public class ShellView {
     // ════════════════════════════════════════
 
     private void addBook() {
-        prompt("Book Name", "Untitled Book").ifPresent(name -> {
+        showSingleLineInput("Book Name", "Untitled Book").ifPresent(name -> {
             Book book = new Book(blankAsDefault(name, "Untitled Book"));
             state.getBooks().add(book);
             selectedBookIndex = state.getBooks().size() - 1;
@@ -366,7 +366,7 @@ public class ShellView {
 
     private void renameBook() {
         if (selectedBook == null) return;
-        prompt("Book Name", selectedBook.getName()).ifPresent(name -> {
+        showSingleLineInput("Book Name", selectedBook.getName()).ifPresent(name -> {
             selectedBook.setName(blankAsDefault(name, "Untitled Book"));
             store.save(state);
             refreshCurrentView();
@@ -375,10 +375,8 @@ public class ShellView {
 
     private void editSummary() {
         if (selectedBook == null) return;
-        TextInputDialog dialog = new TextInputDialog(blankAsDefault(selectedBook.getSummary(), ""));
-        dialog.setTitle("Edit Summary");
-        dialog.setHeaderText("Book Summary");
-        dialog.showAndWait().ifPresent(summary -> {
+        Dialog<String> d = multiLineInputDialog("Edit Summary", blankAsDefault(selectedBook.getSummary(), ""));
+        d.showAndWait().ifPresent(summary -> {
             selectedBook.setSummary(summary);
             store.save(state);
         });
@@ -398,6 +396,7 @@ public class ShellView {
     private void deleteSelectedBook() {
         if (selectedBook == null) return;
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Delete this book?", ButtonType.OK, ButtonType.CANCEL);
+        styleDialog(alert.getDialogPane());
         alert.showAndWait().filter(ButtonType.OK::equals).ifPresent(ok -> {
             state.getBooks().remove(selectedBook);
             selectedBookIndex = Math.min(selectedBookIndex, state.getBooks().size() - 1);

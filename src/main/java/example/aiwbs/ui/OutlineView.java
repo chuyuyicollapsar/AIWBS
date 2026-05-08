@@ -254,7 +254,7 @@ public class OutlineView {
     }
 
     private void addRootOutlineNode() {
-        prompt("Outline Node Title", "New Outline Node").ifPresent(name -> {
+        showSingleLineInput("Outline Node Title", "New Outline Node").ifPresent(name -> {
             OutlineNode node = new OutlineNode(name);
             book.getOutlineRoots().add(node);
             selectedOutlineNode = node;
@@ -265,7 +265,7 @@ public class OutlineView {
     }
 
     private void addChildOutlineNode(OutlineNode parent) {
-        prompt("Outline Node Title", "New Outline Node").ifPresent(name -> {
+        showSingleLineInput("Outline Node Title", "New Outline Node").ifPresent(name -> {
             OutlineNode node = new OutlineNode(name);
             parent.getChildren().add(node);
             selectedOutlineNode = node;
@@ -276,7 +276,7 @@ public class OutlineView {
     }
 
     private void addSiblingOutlineNode(OutlineNode node) {
-        prompt("Outline Node Title", "New Outline Node").ifPresent(name -> {
+        showSingleLineInput("Outline Node Title", "New Outline Node").ifPresent(name -> {
             OutlineNode newNode = new OutlineNode(name);
             OutlineNode parent = findOutlineParent(book.getOutlineRoots(), node.getId());
             if (parent != null) {
@@ -294,7 +294,7 @@ public class OutlineView {
     }
 
     private void renameOutlineNode(OutlineNode node) {
-        prompt("Rename", node.getTitle()).ifPresent(name -> {
+        showSingleLineInput("Rename", node.getTitle()).ifPresent(name -> {
             node.setTitle(name);
             store.save(state);
             buildUI();

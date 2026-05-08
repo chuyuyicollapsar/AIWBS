@@ -359,7 +359,7 @@ public class ContentEditView {
 
     private void addVolume() {
         if (book == null) return;
-        prompt("Volume Name", "Untitled Volume").ifPresent(name -> {
+        showSingleLineInput("Volume Name", "Untitled Volume").ifPresent(name -> {
             Volume v = new Volume(blankAsDefault(name, "Untitled Volume"));
             book.getVolumes().add(v);
             selectedVolume = v;
@@ -372,7 +372,7 @@ public class ContentEditView {
 
     private void addChapter() {
         if (selectedVolume == null) return;
-        prompt("Chapter Name", "Untitled Chapter").ifPresent(name -> {
+        showSingleLineInput("Chapter Name", "Untitled Chapter").ifPresent(name -> {
             Chapter ch = new Chapter(blankAsDefault(name, "Untitled Chapter"), "");
             selectedVolume.getChapters().add(ch);
             selectedChapter = ch;
@@ -480,7 +480,7 @@ public class ContentEditView {
     }
 
     private void renameVolume(Volume v) {
-        prompt("Volume Name", v.getName()).ifPresent(name -> {
+        showSingleLineInput("Volume Name", v.getName()).ifPresent(name -> {
             v.setName(blankAsDefault(name, "Untitled Volume"));
             store.save(state);
             buildUI();
@@ -488,7 +488,7 @@ public class ContentEditView {
     }
 
     private void renameChapter(Chapter ch) {
-        prompt("Chapter Name", ch.getTitle()).ifPresent(name -> {
+        showSingleLineInput("Chapter Name", ch.getTitle()).ifPresent(name -> {
             ch.setTitle(blankAsDefault(name, "Untitled Chapter"));
             store.save(state);
             buildUI();

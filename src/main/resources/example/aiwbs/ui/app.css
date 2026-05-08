@@ -131,7 +131,62 @@
     -fx-background-color: #0f1730;
 }
 
-/* ── ComboBox ── */
+/* ── Dialog / Alert ── */
+
+.dialog-pane {
+    -fx-background-color: #0f1730;
+    -fx-border-color: #26365f;
+    -fx-border-width: 1;
+    -fx-padding: 0;
+}
+
+.dialog-pane .header-panel {
+    -fx-background-color: #111a34;
+    -fx-padding: 14 16 8 16;
+}
+
+.dialog-pane .header-panel .label {
+    -fx-text-fill: #d7bb74;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.dialog-pane .content {
+    -fx-background-color: #0f1730;
+}
+
+.dialog-pane .text-field,
+.dialog-pane .text-area {
+    -fx-background-color: #111a34;
+    -fx-control-inner-background: #111a34;
+    -fx-text-fill: #edf2ff;
+    -fx-prompt-text-fill: rgba(237,242,255,0.45);
+    -fx-highlight-fill: #d7bb74;
+    -fx-highlight-text-fill: #11182d;
+    -fx-border-color: #26365f;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+}
+
+.dialog-pane .text-area .content {
+    -fx-background-color: #111a34;
+}
+
+.dialog-pane .text-field:focused,
+.dialog-pane .text-area:focused {
+    -fx-border-color: #d7bb74;
+}
+
+.dialog-pane .content.label {
+    -fx-text-fill: #e7ecff;
+    -fx-font-size: 14px;
+    -fx-padding: 12 16;
+}
+
+.dialog-pane .button-bar {
+    -fx-background-color: #111a34;
+    -fx-padding: 8 16 12 16;
+}
 
 .combo-box {
     -fx-background-color: #111a34;

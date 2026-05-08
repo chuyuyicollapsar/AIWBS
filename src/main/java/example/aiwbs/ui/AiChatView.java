@@ -343,8 +343,7 @@ public class AiChatView {
     }
 
     private void promptNew() {
-        TextInputDialog d = new TextInputDialog("New Session");
-        d.setTitle("New Session");
+        Dialog<String> d = ViewUtils.singleLineInputDialog("New Session", "New Session");
         d.showAndWait().ifPresent(name -> {
             if (name.isBlank()) name = "New Session";
             AiSession s = new AiSession(name);
@@ -354,8 +353,7 @@ public class AiChatView {
     }
 
     private void rename(AiSession s) {
-        TextInputDialog d = new TextInputDialog(s.getTitle());
-        d.setTitle("Rename");
+        Dialog<String> d = ViewUtils.singleLineInputDialog("Rename", s.getTitle());
         d.showAndWait().ifPresent(name -> {
             if (!name.isBlank()) {
                 s.setTitle(name);
@@ -368,6 +366,7 @@ public class AiChatView {
     private void delete(AiSession s) {
         Alert a = new Alert(Alert.AlertType.CONFIRMATION, "Delete \"" + s.getTitle() + "\"?",
                 ButtonType.OK, ButtonType.CANCEL);
+        ViewUtils.styleDialog(a.getDialogPane());
         a.showAndWait().filter(ButtonType.OK::equals).ifPresent(ok -> {
             store.delete(s);
             if (currentSession != null && currentSession.getId().equals(s.getId())) {
@@ -505,7 +504,17 @@ public class AiChatView {
             MenuItem renameItem = new MenuItem("重命名标题");
             renameItem.setOnAction(ev -> renameTurnTitle(node));
             MenuItem deleteItem = new MenuItem("删除");
-            deleteItem.setOnAction(ev -> deleteTurn(node));
+            deleteItem.setOnAction(ev -> {
+                Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+                        "确认删除该节点及其子节点？",
+                        ButtonType.YES, ButtonType.NO);
+                alert.setTitle("删除确认");
+                alert.setHeaderText(null);
+                ViewUtils.styleDialog(alert.getDialogPane());
+                alert.showAndWait().ifPresent(btn -> {
+                    if (btn == ButtonType.YES) deleteTurn(node);
+                });
+            });
             ctxMenu.getItems().addAll(renameItem, deleteItem);
             b.setOnContextMenuRequested(ev -> {
                 ctxMenu.show(b, Side.RIGHT, 0, 0);
@@ -683,7 +692,8 @@ public class AiChatView {
         bar.setPadding(new Insets(2, 0, 0, 0));
         if (isUser) {
             bar.getChildren().add(iconBtn(IconButtons.insertButton(c), e -> insertCustomTurn(node)));
-            if (node.getUserContent() != null && !node.getUserContent().isBlank()) {
+            boolean isRoot = currentSession.getRootMessages().contains(node);
+            if (!isRoot && node.getUserContent() != null && !node.getUserContent().isBlank()) {
                 bar.getChildren().add(iconBtn(IconButtons.editButton(c), e -> editAndResendTurn(node)));
             }
             bar.getChildren().add(iconBtn(IconButtons.copyButton(c), e -> {
@@ -846,8 +856,7 @@ public class AiChatView {
     // ════════════════════════════════════════
 
     private void editAndResendTurn(AiMessage node) {
-        TextInputDialog d = new TextInputDialog(node.getUserContent());
-        d.setTitle("Edit & Resend");
+        Dialog<String> d = ViewUtils.multiLineInputDialog("Edit & Resend", node.getUserContent());
         d.showAndWait().ifPresent(newText -> {
             if (newText.isBlank()) return;
 
@@ -899,14 +908,23 @@ public class AiChatView {
     private void insertCustomTurn(AiMessage node) {
         Dialog<ButtonType> d = new Dialog<>();
         d.setTitle("Insert Custom Pair");
+        d.setHeaderText("Insert Custom Pair");
         TextArea uf = new TextArea();
         uf.setPromptText("User message");
         uf.setPrefRowCount(3);
+        uf.setPrefColumnCount(40);
+        uf.setWrapText(true);
         TextArea af = new TextArea();
         af.setPromptText("Assistant response");
         af.setPrefRowCount(3);
+        af.setPrefColumnCount(40);
+        af.setWrapText(true);
+        for (TextArea t : new TextArea[]{uf, af}) {
+            ViewUtils.installDialogTextAreaKeys(d, t);
+        }
         d.getDialogPane().setContent(new VBox(8, new Label("User:"), uf, new Label("Assistant:"), af));
         d.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        ViewUtils.styleDialog(d.getDialogPane());
         d.showAndWait().ifPresent(btn -> {
             if (btn != ButtonType.OK) return;
             String u = uf.getText();
@@ -950,9 +968,7 @@ public class AiChatView {
 
     private void renameTurnTitle(AiMessage node) {
         if (currentSession == null) return;
-        TextInputDialog d = new TextInputDialog(node.getTitle());
-        d.setTitle("Rename Turn");
-        d.setHeaderText("New name for this turn:");
+        Dialog<String> d = ViewUtils.singleLineInputDialog("Rename Turn", node.getTitle());
         d.showAndWait().ifPresent(name -> {
             if (!name.isBlank()) {
                 node.setTitle(name);
