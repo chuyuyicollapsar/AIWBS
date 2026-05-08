@@ -35,6 +35,15 @@ import java.util.Map;
  * AI聊天会话界面。
  */
 public class AiChatView {
+    private static final String SYSTEM_PROMPT =
+            "You are a professional writing assistant. You have access to the user's book via tools "
+            + "(get_table_of_contents, get_outline_tree, get_volume_outline, get_chapter_outline, get_chapter_content). "
+            + "First get the table of contents or outline to understand the book, then drill into details as needed. "
+            + "IMPORTANT: get_outline_tree returns a JSON tree. The `children` array is the ONLY indicator of parent-child "
+            + "relationships. A node's `content` is plain text that may contain its own internal sub-headings "
+            + "(e.g. ## 背景设定), but those are NOT separate nodes in the tree. "
+            + "Provide creative suggestions, plot ideas, character development, and editing advice.";
+
     private final BorderPane root = new BorderPane();
     private final AiSessionStore store;
     private final AppState appState;
@@ -615,6 +624,8 @@ public class AiChatView {
             sessionTitle.setText("AI Conversation");
             inputField.setDisable(true);
             sendButton.setDisable(true);
+            currentPath.clear();
+            refreshPathNodePanel();
             return;
         }
         sessionTitle.setText(currentSession.getTitle());
@@ -741,16 +752,11 @@ public class AiChatView {
 
         List<String> messages = flatten(apiCtx);
         AiConfig cfg = appState.getAiConfig();
-        String sys = "You are a professional writing assistant. You have access to the user's book via tools (get_table_of_contents, "
-                + "get_outline_tree, get_volume_outline, get_chapter_outline, get_chapter_content). "
-                + "First get the table of contents or outline to understand the book, then drill into details as needed. "
-                + "Provide creative suggestions, plot ideas, character development, and editing advice.";
-
         String toolsJson = ToolDefinitions.getToolsJson();
 
         new Thread(() -> {
             try {
-                String resp = callWithTools(cfg, sys, messages, toolsJson, 0);
+                String resp = callWithTools(cfg, SYSTEM_PROMPT, messages, toolsJson, 0);
                 Platform.runLater(() -> {
                     node.setAssistantContent(resp);
                     store.save(currentSession);
@@ -866,14 +872,10 @@ public class AiChatView {
             List<AiMessage> ctx = currentPath;
             List<String> json = flatten(ctx);
             AiConfig cfg = appState.getAiConfig();
-            String sys = "You are a professional writing assistant. You have access to the user's book via tools (get_table_of_contents, "
-                    + "get_outline_tree, get_volume_outline, get_chapter_outline, get_chapter_content). "
-                    + "First get the table of contents or outline to understand the book, then drill into details as needed. "
-                    + "Provide creative suggestions, plot ideas, character development, and editing advice.";
             String toolsJson = ToolDefinitions.getToolsJson();
             new Thread(() -> {
                 try {
-                    String resp = callWithTools(cfg, sys, json, toolsJson, 0);
+                    String resp = callWithTools(cfg, SYSTEM_PROMPT, json, toolsJson, 0);
                     Platform.runLater(() -> {
                         sib.setAssistantContent(resp);
                         store.save(currentSession);

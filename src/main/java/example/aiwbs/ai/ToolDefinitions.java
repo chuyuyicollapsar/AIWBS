@@ -16,7 +16,7 @@ public class ToolDefinitions {
         tools.add(func("get_table_of_contents",
                 "获取当前书籍的完整目录：所有分卷名称、章节名称及每章字数。"));
         tools.add(func("get_outline_tree",
-                "获取当前书籍的大纲树：各节点标题及内容（每条最多 100 字摘要）。大纲是书籍的骨架情节结构。"));
+                "获取当前书籍的大纲树（JSON，children 表示子节点）。注意：每个节点的 content 字段是纯文本描述，其中可能包含它自己的子标题（如 ## 背景设定、## 人物关系），这些子标题属于该节点的内容，并非大纲树的子节点。父子关系仅由 children 数组表达。"));
         tools.add(func("get_volume_outline",
                 "获取指定分卷的细纲内容。",
                 obj("type", "object", "properties", obj(

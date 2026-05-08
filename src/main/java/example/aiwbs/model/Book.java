@@ -1,5 +1,9 @@
 package example.aiwbs.model;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import java.io.Serial;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -112,31 +116,34 @@ public class Book implements Serializable {
         return n;
     }
 
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+
     /**
-     * 返回格式化的完整大纲树：标题 + 内容（递归缩进）。
+     * 返回完整的 JSON 大纲树，保留完整的父子层级结构。
      */
     public String getOutlineTreeString() {
         if (outlineRoots == null || outlineRoots.isEmpty()) {
-            return "（无大纲）";
+            return "[]";
         }
-        StringBuilder sb = new StringBuilder();
-        appendOutlineNodes(sb, outlineRoots, 0);
-        return sb.toString();
+        JsonArray arr = toJsonArray(outlineRoots);
+        return GSON.toJson(arr);
     }
 
-    private void appendOutlineNodes(StringBuilder sb, List<OutlineNode> nodes, int depth) {
-        String indent = "  ".repeat(depth);
+    private JsonArray toJsonArray(List<OutlineNode> nodes) {
+        JsonArray arr = new JsonArray();
         for (OutlineNode n : nodes) {
-            sb.append(indent).append("· ").append(n.getTitle());
+            JsonObject obj = new JsonObject();
+            obj.addProperty("title", n.getTitle());
             String c = n.getContent();
             if (c != null && !c.isEmpty()) {
-                sb.append("：").append(c.length() > 100 ? c.substring(0, 100) + "…" : c);
+                obj.addProperty("content", c);
             }
-            sb.append('\n');
             if (!n.getChildren().isEmpty()) {
-                appendOutlineNodes(sb, n.getChildren(), depth + 1);
+                obj.add("children", toJsonArray(n.getChildren()));
             }
+            arr.add(obj);
         }
+        return arr;
     }
 
     /**
