@@ -20,20 +20,20 @@ public class ToolDefinitions {
         tools.add(func("get_volume_outline",
                 "获取指定分卷的细纲内容。",
                 obj("type", "object", "properties", obj(
-                        "vol_index", obj("type", "integer", "description", "卷号，从 1 开始")),
-                   "required", arr("vol_index"))));
+                        "volume_name", obj("type", "string", "description", "分卷名，必须使用目录中的完整分卷名称")),
+                   "required", arr("volume_name"))));
         tools.add(func("get_chapter_outline",
                 "获取指定章节的细纲内容。",
                 obj("type", "object", "properties", obj(
-                        "vol_index", obj("type", "integer", "description", "卷号，从 1 开始"),
-                        "ch_index", obj("type", "integer", "description", "章号，从 1 开始")),
-                   "required", arr("vol_index", "ch_index"))));
+                        "volume_name", obj("type", "string", "description", "分卷名，必须使用目录中的完整分卷名称"),
+                        "chapter_name", obj("type", "string", "description", "章节名，必须使用目录中的完整章节名称")),
+                   "required", arr("volume_name", "chapter_name"))));
         tools.add(func("get_chapter_content",
                 "获取指定章节的完整正文内容。注意：正文可能较长，请先通过 get_chapter_outline 了解章节内容。",
                 obj("type", "object", "properties", obj(
-                        "vol_index", obj("type", "integer", "description", "卷号，从 1 开始"),
-                        "ch_index", obj("type", "integer", "description", "章号，从 1 开始")),
-                   "required", arr("vol_index", "ch_index"))));
+                        "volume_name", obj("type", "string", "description", "分卷名，必须使用目录中的完整分卷名称"),
+                        "chapter_name", obj("type", "string", "description", "章节名，必须使用目录中的完整章节名称")),
+                   "required", arr("volume_name", "chapter_name"))));
         cached = GSON.toJson(tools);
         return cached;
     }

@@ -158,6 +158,17 @@ public class Book implements Serializable {
     }
 
     /**
+     * 按分卷名获取细纲。分卷名必须唯一，避免 AI 工具调用出现歧义。
+     */
+    public String getVolumeOutline(String volumeName) {
+        Volume volume = findUniqueVolume(volumeName);
+        if (volume == null) return "（未找到分卷：" + displayName(volumeName) + "）";
+        if (volume == DUPLICATE_VOLUME) return "（分卷名重复，无法唯一定位：" + displayName(volumeName) + "）";
+        String oc = volume.getOutlineContent();
+        return oc.isEmpty() ? "（该分卷无细纲）" : oc;
+    }
+
+    /**
      * 获取第 volIndex 卷第 chIndex 章的细纲（从 1 开始）。
      */
     public String getChapterOutline(int volIndex, int chIndex) {
@@ -169,6 +180,16 @@ public class Book implements Serializable {
             return "（无效章号，该卷共 " + chapters.size() + " 章）";
         }
         String oc = chapters.get(chIndex - 1).getOutlineContent();
+        return oc.isEmpty() ? "（该章无细纲）" : oc;
+    }
+
+    /**
+     * 按分卷名和章节名获取章节细纲。
+     */
+    public String getChapterOutline(String volumeName, String chapterName) {
+        ChapterLookup lookup = findUniqueChapter(volumeName, chapterName);
+        if (lookup.error != null) return lookup.error;
+        String oc = lookup.chapter.getOutlineContent();
         return oc.isEmpty() ? "（该章无细纲）" : oc;
     }
 
@@ -185,6 +206,76 @@ public class Book implements Serializable {
         }
         String content = chapters.get(chIndex - 1).getContent();
         return content == null || content.isEmpty() ? "（该章无正文）" : content;
+    }
+
+    /**
+     * 按分卷名和章节名获取章节正文。
+     */
+    public String getChapterContent(String volumeName, String chapterName) {
+        ChapterLookup lookup = findUniqueChapter(volumeName, chapterName);
+        if (lookup.error != null) return lookup.error;
+        String content = lookup.chapter.getContent();
+        return content == null || content.isEmpty() ? "（该章无正文）" : content;
+    }
+
+    private static final Volume DUPLICATE_VOLUME = new Volume("__duplicate_volume_marker__");
+
+    private Volume findUniqueVolume(String volumeName) {
+        String target = normalizeName(volumeName);
+        if (target.isEmpty()) return null;
+        Volume found = null;
+        for (Volume volume : volumes) {
+            if (!normalizeName(volume.getName()).equals(target)) continue;
+            if (found != null) return DUPLICATE_VOLUME;
+            found = volume;
+        }
+        return found;
+    }
+
+    private ChapterLookup findUniqueChapter(String volumeName, String chapterName) {
+        Volume volume = findUniqueVolume(volumeName);
+        if (volume == null) {
+            return ChapterLookup.error("（未找到分卷：" + displayName(volumeName) + "）");
+        }
+        if (volume == DUPLICATE_VOLUME) {
+            return ChapterLookup.error("（分卷名重复，无法唯一定位：" + displayName(volumeName) + "）");
+        }
+
+        String target = normalizeName(chapterName);
+        if (target.isEmpty()) {
+            return ChapterLookup.error("（章节名不能为空）");
+        }
+        Chapter found = null;
+        for (Chapter chapter : volume.getChapters()) {
+            if (!normalizeName(chapter.getTitle()).equals(target)) continue;
+            if (found != null) {
+                return ChapterLookup.error("（章节名重复，无法唯一定位：" + displayName(chapterName) + "）");
+            }
+            found = chapter;
+        }
+        if (found == null) {
+            return ChapterLookup.error("（未找到章节：" + displayName(chapterName) + "）");
+        }
+        return ChapterLookup.chapter(found);
+    }
+
+    private static String normalizeName(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private static String displayName(String value) {
+        String normalized = normalizeName(value);
+        return normalized.isEmpty() ? "空名称" : normalized;
+    }
+
+    private record ChapterLookup(Chapter chapter, String error) {
+        static ChapterLookup chapter(Chapter chapter) {
+            return new ChapterLookup(chapter, null);
+        }
+
+        static ChapterLookup error(String error) {
+            return new ChapterLookup(null, error);
+        }
     }
 
     @Override

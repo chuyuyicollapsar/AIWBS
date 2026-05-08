@@ -849,16 +849,25 @@ public class AiChatView {
                 case "get_table_of_contents" -> book.getTableOfContents();
                 case "get_outline_tree" -> book.getOutlineTreeString();
                 case "get_volume_outline" ->
-                    book.getVolumeOutline(args.get("vol_index").getAsInt());
+                    book.getVolumeOutline(requiredStringArg(args, "volume_name"));
                 case "get_chapter_outline" ->
-                    book.getChapterOutline(args.get("vol_index").getAsInt(), args.get("ch_index").getAsInt());
+                    book.getChapterOutline(requiredStringArg(args, "volume_name"),
+                            requiredStringArg(args, "chapter_name"));
                 case "get_chapter_content" ->
-                    book.getChapterContent(args.get("vol_index").getAsInt(), args.get("ch_index").getAsInt());
+                    book.getChapterContent(requiredStringArg(args, "volume_name"),
+                            requiredStringArg(args, "chapter_name"));
                 default -> "[Error] Unknown tool: " + name;
             };
         } catch (Exception e) {
             return "[Error executing " + name + "] " + e.getMessage();
         }
+    }
+
+    private String requiredStringArg(JsonObject args, String name) {
+        if (!args.has(name) || args.get(name).isJsonNull()) {
+            throw new IllegalArgumentException("Missing required argument: " + name);
+        }
+        return args.get(name).getAsString();
     }
 
 

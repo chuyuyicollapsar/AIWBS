@@ -15,6 +15,8 @@ import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -360,7 +362,12 @@ public class ContentEditView {
     private void addVolume() {
         if (book == null) return;
         showSingleLineInput("Volume Name", "Untitled Volume").ifPresent(name -> {
-            Volume v = new Volume(blankAsDefault(name, "Untitled Volume"));
+            String volumeName = blankAsDefault(name, "Untitled Volume").trim();
+            if (hasVolumeNamed(volumeName, null)) {
+                showDuplicateName("分卷", volumeName);
+                return;
+            }
+            Volume v = new Volume(volumeName);
             book.getVolumes().add(v);
             selectedVolume = v;
             selectedChapter = null;
@@ -373,7 +380,12 @@ public class ContentEditView {
     private void addChapter() {
         if (selectedVolume == null) return;
         showSingleLineInput("Chapter Name", "Untitled Chapter").ifPresent(name -> {
-            Chapter ch = new Chapter(blankAsDefault(name, "Untitled Chapter"), "");
+            String chapterName = blankAsDefault(name, "Untitled Chapter").trim();
+            if (hasChapterNamed(selectedVolume, chapterName, null)) {
+                showDuplicateName("章节", chapterName);
+                return;
+            }
+            Chapter ch = new Chapter(chapterName, "");
             selectedVolume.getChapters().add(ch);
             selectedChapter = ch;
             store.save(state);
@@ -481,7 +493,12 @@ public class ContentEditView {
 
     private void renameVolume(Volume v) {
         showSingleLineInput("Volume Name", v.getName()).ifPresent(name -> {
-            v.setName(blankAsDefault(name, "Untitled Volume"));
+            String volumeName = blankAsDefault(name, "Untitled Volume").trim();
+            if (hasVolumeNamed(volumeName, v)) {
+                showDuplicateName("分卷", volumeName);
+                return;
+            }
+            v.setName(volumeName);
             store.save(state);
             buildUI();
         });
@@ -489,10 +506,50 @@ public class ContentEditView {
 
     private void renameChapter(Chapter ch) {
         showSingleLineInput("Chapter Name", ch.getTitle()).ifPresent(name -> {
-            ch.setTitle(blankAsDefault(name, "Untitled Chapter"));
+            String chapterName = blankAsDefault(name, "Untitled Chapter").trim();
+            if (hasChapterNamed(selectedVolume, chapterName, ch)) {
+                showDuplicateName("章节", chapterName);
+                return;
+            }
+            ch.setTitle(chapterName);
             store.save(state);
             buildUI();
         });
+    }
+
+    private boolean hasVolumeNamed(String name, Volume ignored) {
+        String normalized = normalizeName(name);
+        if (normalized.isEmpty()) return false;
+        for (Volume volume : book.getVolumes()) {
+            if (volume == ignored) continue;
+            if (normalizeName(volume.getName()).equals(normalized)) return true;
+        }
+        return false;
+    }
+
+    private boolean hasChapterNamed(Volume volume, String name, Chapter ignored) {
+        if (volume == null) return false;
+        String normalized = normalizeName(name);
+        if (normalized.isEmpty()) return false;
+        for (Chapter chapter : volume.getChapters()) {
+            if (chapter == ignored) continue;
+            if (normalizeName(chapter.getTitle()).equals(normalized)) return true;
+        }
+        return false;
+    }
+
+    private static String normalizeName(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private void showDuplicateName(String type, String name) {
+        Alert alert = new Alert(Alert.AlertType.ERROR,
+                type + "名称已存在：" + name,
+                ButtonType.OK);
+        alert.setTitle("名称重复");
+        alert.setHeaderText(null);
+        styleDialog(alert.getDialogPane());
+        alert.showAndWait();
     }
 
     private void syncShellState() {
