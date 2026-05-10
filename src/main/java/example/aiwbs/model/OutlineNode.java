@@ -17,7 +17,11 @@ public class OutlineNode implements Serializable {
     private final List<OutlineNode> children = new ArrayList<>();
 
     public OutlineNode(String title) {
-        this.id = UUID.randomUUID().toString();
+        this(UUID.randomUUID().toString(), title);
+    }
+
+    public OutlineNode(String id, String title) {
+        this.id = id == null || id.isBlank() ? UUID.randomUUID().toString() : id;
         this.title = title;
         this.content = "";
     }

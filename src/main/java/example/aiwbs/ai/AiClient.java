@@ -113,6 +113,23 @@ public class AiClient {
         return extractOpenAiContent(json);
     }
 
+    private String extractDeepSeekReasoningContent(String json) {
+        String trimmed = json == null ? "" : json.trim();
+        if (trimmed.isEmpty() || !trimmed.startsWith("{")) {
+            return "";
+        }
+        JsonObject root = JsonParser.parseString(trimmed).getAsJsonObject();
+        JsonArray choices = root.getAsJsonArray("choices");
+        if (choices == null || choices.isEmpty()) {
+            return "";
+        }
+        JsonObject message = choices.get(0).getAsJsonObject().getAsJsonObject("message");
+        if (message == null || !message.has("reasoning_content") || message.get("reasoning_content").isJsonNull()) {
+            return "";
+        }
+        return message.get("reasoning_content").getAsString();
+    }
+
     // ════════════════════════════════════════
     //  Chat (OpenAI-compatible)
     // ════════════════════════════════════════
@@ -120,6 +137,12 @@ public class AiClient {
     public String chat(AiConfig config, String systemPrompt, List<String> messageJsonObjects) throws Exception {
         String raw = chatRaw(config, systemPrompt, messageJsonObjects, null);
         return extractOpenAiContent(raw);
+    }
+
+    public ChatResult chatWithResult(AiConfig config, String systemPrompt, List<String> messageJsonObjects,
+                                     String toolsJson) throws Exception {
+        String raw = chatRaw(config, systemPrompt, messageJsonObjects, toolsJson);
+        return new ChatResult(extractOpenAiContent(raw), extractDeepSeekReasoningContent(raw), raw);
     }
 
     /**
@@ -353,6 +376,30 @@ public class AiClient {
         JsonObject thinking = new JsonObject();
         thinking.addProperty("type", "disabled");
         return thinking;
+    }
+
+    public static final class ChatResult {
+        private final String content;
+        private final String reasoningContent;
+        private final String rawJson;
+
+        public ChatResult(String content, String reasoningContent, String rawJson) {
+            this.content = content;
+            this.reasoningContent = reasoningContent;
+            this.rawJson = rawJson;
+        }
+
+        public String content() {
+            return content;
+        }
+
+        public String reasoningContent() {
+            return reasoningContent;
+        }
+
+        public String rawJson() {
+            return rawJson;
+        }
     }
 
     private String normalizeAnthropicMessagesUrl(String baseUrl) {

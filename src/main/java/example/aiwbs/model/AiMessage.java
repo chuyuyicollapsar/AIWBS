@@ -9,6 +9,7 @@ public class AiMessage {
     private String title;
     private String userContent;
     private String assistantContent;
+    private String assistantReasoningContent;
     private long timestamp;
     private final List<AiMessage> children;
 
@@ -26,6 +27,10 @@ public class AiMessage {
     public void setUserContent(String userContent) { this.userContent = userContent; }
     public String getAssistantContent() { return assistantContent; }
     public void setAssistantContent(String assistantContent) { this.assistantContent = assistantContent; }
+    public String getAssistantReasoningContent() { return assistantReasoningContent; }
+    public void setAssistantReasoningContent(String assistantReasoningContent) {
+        this.assistantReasoningContent = assistantReasoningContent;
+    }
     public long getTimestamp() { return timestamp; }
     public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
     public List<AiMessage> getChildren() { return children; }

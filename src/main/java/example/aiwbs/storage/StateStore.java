@@ -1,33 +1,39 @@
 package example.aiwbs.storage;
 
 import example.aiwbs.model.AppState;
+import example.aiwbs.model.Book;
 
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 public class StateStore {
-    private final Path file = Path.of(System.getProperty("user.home"), ".aiwbs", "state.bin");
+    private final SettingsStore settingsStore;
+    private final BookStore bookStore;
+
+    public StateStore() {
+        this(Path.of(System.getProperty("user.home"), ".aiwbs"));
+    }
+
+    StateStore(Path dataDir) {
+        this.settingsStore = new SettingsStore(dataDir);
+        this.bookStore = new BookStore(dataDir);
+    }
 
     public AppState load() {
-        if (!Files.exists(file)) {
-            return new AppState();
-        }
-        try (ObjectInputStream in = new ObjectInputStream(Files.newInputStream(file))) {
-            return (AppState) in.readObject();
-        } catch (Exception e) {
-            return new AppState();
-        }
+        AppState state = new AppState();
+        SettingsStore.SettingsData settings = settingsStore.load();
+        settings.applyTo(state.getAiConfig());
+        List<Book> books = bookStore.loadAll(settings.bookOrder());
+        state.getBooks().addAll(books);
+        return state;
     }
 
     public void save(AppState state) {
         try {
-            Files.createDirectories(file.getParent());
-            try (ObjectOutputStream out = new ObjectOutputStream(Files.newOutputStream(file))) {
-                out.writeObject(state);
-            }
-        } catch (Exception ignored) {
+            bookStore.saveAll(state.getBooks());
+            settingsStore.save(state);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 }

@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * AI聊天会话界面。
+ * AI chat session view.
  */
 public class AiChatView {
     private static final String SYSTEM_PROMPT =
@@ -43,7 +43,7 @@ public class AiChatView {
             + "First get the table of contents or outline to understand the book, then drill into details as needed. "
             + "IMPORTANT: get_outline_tree returns a JSON tree. The `children` array is the ONLY indicator of parent-child "
             + "relationships. A node's `content` is plain text that may contain its own internal sub-headings "
-            + "(e.g. ## 背景设定), but those are NOT separate nodes in the tree. "
+            + "(e.g. ## 閼冲本娅欑拋鎯х暰), but those are NOT separate nodes in the tree. "
             + "Provide creative suggestions, plot ideas, character development, and editing advice.";
 
     private final BorderPane root = new BorderPane();
@@ -119,9 +119,9 @@ public class AiChatView {
         if (onToggle != null) onToggle.run();
     }
 
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
     //  Layout
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
 
     private void buildUI() {
         root.setStyle("-fx-background-color: #0f1730;");
@@ -147,17 +147,17 @@ public class AiChatView {
 
         boolean sVis = sessionVis;
         Button sBtn = sVis ? IconButtons.sessionToggleActiveButton() : IconButtons.sessionToggleButton();
-        ViewUtils.tip(sBtn, "会话列表", "right");
+        ViewUtils.tip(sBtn, "Session list", "right");
         sBtn.setOnAction(e -> { toggleSessionPanel(); refreshLeftBar(); });
 
         boolean nVis = navVis;
         Button nBtn = nVis ? IconButtons.branchNavigatorActiveButton() : IconButtons.branchNavigatorButton();
-        ViewUtils.tip(nBtn, "分支导航器", "right");
+        ViewUtils.tip(nBtn, "Branch navigator", "right");
         nBtn.setOnAction(e -> { toggleNavTree(); refreshLeftBar(); });
 
         boolean pVis = pathNodeVis;
         Button pBtn = pVis ? IconButtons.pathNodeNavigatorActiveButton() : IconButtons.pathNodeNavigatorButton();
-        ViewUtils.tip(pBtn, "对话链", "right");
+        ViewUtils.tip(pBtn, "Path navigator", "right");
         pBtn.setOnAction(e -> { togglePathNodePanel(); refreshLeftBar(); });
 
         bar.getChildren().addAll(sBtn, nBtn, pBtn);
@@ -169,15 +169,15 @@ public class AiChatView {
         leftBar.getChildren().clear();
         boolean sVis = sessionVis;
         Button sBtn = sVis ? IconButtons.sessionToggleActiveButton() : IconButtons.sessionToggleButton();
-        ViewUtils.tip(sBtn, "会话列表", "right");
+        ViewUtils.tip(sBtn, "Session list", "right");
         sBtn.setOnAction(e -> { toggleSessionPanel(); refreshLeftBar(); });
         boolean nVis = navVis;
         Button nBtn = nVis ? IconButtons.branchNavigatorActiveButton() : IconButtons.branchNavigatorButton();
-        ViewUtils.tip(nBtn, "分支导航器", "right");
+        ViewUtils.tip(nBtn, "Branch navigator", "right");
         nBtn.setOnAction(e -> { toggleNavTree(); refreshLeftBar(); });
         boolean pVis = pathNodeVis;
         Button pBtn = pVis ? IconButtons.pathNodeNavigatorActiveButton() : IconButtons.pathNodeNavigatorButton();
-        ViewUtils.tip(pBtn, "对话链", "right");
+        ViewUtils.tip(pBtn, "Path navigator", "right");
         pBtn.setOnAction(e -> { togglePathNodePanel(); refreshLeftBar(); });
         leftBar.getChildren().addAll(sBtn, nBtn, pBtn);
     }
@@ -188,7 +188,7 @@ public class AiChatView {
         sessionPanel.setPadding(new Insets(12));
         sessionPanel.setStyle("-fx-background-color: #111a34; -fx-border-color: #223055; -fx-border-width: 0 1 0 0;");
 
-        Label title = new Label("会话列表 – " + book.getName());
+        Label title = new Label("Session list - " + book.getName());
         title.setWrapText(true);
         title.setStyle("-fx-text-fill: #fff; -fx-font-size: 15px; -fx-font-weight: bold;");
 
@@ -261,7 +261,7 @@ public class AiChatView {
 
     private HBox buildInput() {
         inputField = new TextArea();
-        inputField.setPromptText("Type a message… (Enter to send)");
+        inputField.setPromptText("Type a message閳?(Enter to send)");
         inputField.setWrapText(true);
         inputField.setPrefRowCount(1);
         inputField.setMaxHeight(120);
@@ -288,9 +288,9 @@ public class AiChatView {
         return box;
     }
 
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
     //  Session Management
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
 
     private void loadSessions() {
         while (sessionPanel.getChildren().size() > 2) {
@@ -384,13 +384,13 @@ public class AiChatView {
         });
     }
 
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
     //  Branch Navigator
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
 
     private void refreshNav() {
         navPanel.getChildren().clear();
-        Label title = new Label("分支导航器");
+        Label title = new Label("Branch Navigator");
         title.setStyle("-fx-text-fill: #fff; -fx-font-size: 15px; -fx-font-weight: bold;");
         navPanel.getChildren().add(title);
         if (currentSession == null) return;
@@ -418,13 +418,13 @@ public class AiChatView {
         navPanel.getChildren().add(sp);
     }
 
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
     //  Path Node Navigator
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
 
     private void refreshPathNodePanel() {
         pathNodePanel.getChildren().clear();
-        Label title = new Label("对话链");
+        Label title = new Label("Path Navigator");
         title.setStyle("-fx-text-fill: #fff; -fx-font-size: 15px; -fx-font-weight: bold;");
         pathNodePanel.getChildren().add(title);
 
@@ -444,10 +444,10 @@ public class AiChatView {
 
             String nodeTitle = node.getTitle() == null || node.getTitle().isBlank() ? "(unnamed)" : node.getTitle();
 
-            // 分叉标记：此节点有多个子节点 → "->n"
+            // Fork marker: this node has multiple children -> "->n"
             String forkMarker = node.getChildren().size() >= 2 ? "->" + node.getChildren().size() : null;
 
-            // 分支标记：父节点有多个子节点 → "位置/总数"
+            // Branch marker: parent has multiple children -> "pos/total"
             String branchMarker = null;
             if (i > 0) {
                 AiMessage parent = currentPath.get(i - 1);
@@ -506,14 +506,14 @@ public class AiChatView {
             });
 
             ContextMenu ctxMenu = new ContextMenu();
-            MenuItem renameItem = new MenuItem("重命名标题");
+            MenuItem renameItem = new MenuItem("Rename label");
             renameItem.setOnAction(ev -> renameTurnTitle(node));
-            MenuItem deleteItem = new MenuItem("删除");
+            MenuItem deleteItem = new MenuItem("Delete");
             deleteItem.setOnAction(ev -> {
                 Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
-                        "确认删除该节点及其子节点？",
+                        "Delete this node and its children?",
                         ButtonType.YES, ButtonType.NO);
-                alert.setTitle("删除确认");
+                alert.setTitle("Delete confirmation");
                 alert.setHeaderText(null);
                 ViewUtils.styleDialog(alert.getDialogPane());
                 alert.showAndWait().ifPresent(btn -> {
@@ -562,9 +562,9 @@ public class AiChatView {
             String cid = ch.getId();
             boolean s = cid.equals(sel);
             String d = ch.getTitle() == null || ch.getTitle().isBlank() ? "(unnamed)" : ch.getTitle();
-            if (d.length() > 18) d = d.substring(0, 18) + "…";
+            if (d.length() > 18) d = d.substring(0, 18) + "...";
 
-            Button b = new Button((s ? "✓ " : "  ") + d);
+            Button b = new Button((s ? "* " : "  ") + d);
             b.setMaxWidth(Double.MAX_VALUE);
             b.setAlignment(Pos.CENTER_LEFT);
             b.setStyle(s
@@ -594,9 +594,9 @@ public class AiChatView {
         for (AiMessage c : n.getChildren()) initDefaults(c);
     }
 
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
     //  Path Building
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
 
     private List<AiMessage> selectedPath() {
         List<AiMessage> p = new ArrayList<>();
@@ -622,9 +622,9 @@ public class AiChatView {
         followPath(ch.getFirst(), out);
     }
 
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
     //  Message Display
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
 
     private void refreshMessages() {
         messageArea.getChildren().clear();
@@ -669,7 +669,7 @@ public class AiChatView {
                     block.getChildren().add(createBubble(n.getUserContent(), true, n));
                 }
                 if (n.getAssistantContent() != null && !n.getAssistantContent().isBlank()) {
-                    block.getChildren().add(createBubble(n.getAssistantContent(), false, n));
+                    block.getChildren().add(createAssistantBubble(n));
                 } else if (pendingAssistantNodes.contains(n.getId())) {
                     block.getChildren().add(createBubble("AI thinking...", false, n));
                 }
@@ -740,9 +740,9 @@ public class AiChatView {
         return btn;
     }
 
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
     //  Send Message
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
 
     private void send() {
         String text = inputField.getText();
@@ -771,15 +771,16 @@ public class AiChatView {
         refreshMessages();
         scrollToBottom();
 
-        List<String> messages = flatten(apiCtx);
         AiConfig cfg = appState.getAiConfig();
+        List<String> messages = flatten(apiCtx, cfg);
         String toolsJson = ToolDefinitions.getToolsJson();
 
         new Thread(() -> {
             try {
-                String resp = callWithTools(cfg, SYSTEM_PROMPT, messages, toolsJson, 0);
+                AssistantReply resp = callWithTools(cfg, SYSTEM_PROMPT, messages, toolsJson, 0);
                 Platform.runLater(() -> {
-                    node.setAssistantContent(resp);
+                    node.setAssistantContent(resp.content());
+                    node.setAssistantReasoningContent(resp.reasoningContent());
                     pendingAssistantNodes.remove(node.getId());
                     store.save(session);
                     if (isCurrentSession(session)) {
@@ -805,24 +806,22 @@ public class AiChatView {
     }
 
     /**
-     * 带工具调用的递归对话循环，最多 10 轮。
-     */
-    private String callWithTools(AiConfig cfg, String sys, List<String> messages,
-                                  String toolsJson, int depth) throws Exception {
-        if (depth > 10) return "[Error] Tool call loop exceeded max depth";
+     * Recursive chat loop with tool calls, max 10 rounds.
+    */
+    private AssistantReply callWithTools(AiConfig cfg, String sys, List<String> messages,
+                                         String toolsJson, int depth) throws Exception {
+        if (depth > 10) return new AssistantReply("[Error] Tool call loop exceeded max depth", "");
 
         String resp = aiClient.chatRaw(cfg, sys, messages, toolsJson);
         JsonObject root = JsonParser.parseString(resp).getAsJsonObject();
         JsonObject choice = root.getAsJsonArray("choices").get(0).getAsJsonObject();
         String finishReason = choice.get("finish_reason").getAsString();
+        JsonObject msg = choice.getAsJsonObject("message");
 
         if (!"tool_calls".equals(finishReason)) {
-            JsonElement contentEl = choice.getAsJsonObject("message").get("content");
-            return contentEl == null || contentEl.isJsonNull() ? "" : contentEl.getAsString();
+            return new AssistantReply(extractMessageContent(msg.get("content")), extractReasoningContent(msg));
         }
 
-        // 处理 tool_calls：将 assistant 消息加入对话
-        JsonObject msg = choice.getAsJsonObject("message");
         messages.add(msg.toString());
 
         JsonArray toolCalls = msg.getAsJsonArray("tool_calls");
@@ -839,8 +838,9 @@ public class AiChatView {
         return callWithTools(cfg, sys, messages, toolsJson, depth + 1);
     }
 
+
     /**
-     * 执行书籍工具调用，返回结果字符串。
+     * Execute a book tool call and return the result string.
      */
     private String executeTool(String name, String argsJson) {
         try {
@@ -871,9 +871,9 @@ public class AiChatView {
     }
 
 
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
     //  Branch Operations
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
 
     private void editAndResendTurn(AiMessage node) {
         Dialog<String> d = ViewUtils.multiLineInputDialog("Edit & Resend", node.getUserContent());
@@ -900,15 +900,16 @@ public class AiChatView {
             refreshMessages();
             scrollToBottom();
 
-            List<AiMessage> ctx = currentPath;
-            List<String> json = flatten(ctx);
             AiConfig cfg = appState.getAiConfig();
+            List<AiMessage> ctx = currentPath;
+            List<String> json = flatten(ctx, cfg);
             String toolsJson = ToolDefinitions.getToolsJson();
             new Thread(() -> {
                 try {
-                    String resp = callWithTools(cfg, SYSTEM_PROMPT, json, toolsJson, 0);
+                    AssistantReply resp = callWithTools(cfg, SYSTEM_PROMPT, json, toolsJson, 0);
                     Platform.runLater(() -> {
-                        sib.setAssistantContent(resp);
+                        sib.setAssistantContent(resp.content());
+                        sib.setAssistantReasoningContent(resp.reasoningContent());
                         pendingAssistantNodes.remove(sib.getId());
                         store.save(session);
                         if (isCurrentSession(session)) {
@@ -971,9 +972,9 @@ public class AiChatView {
         });
     }
 
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
     //  Turn Operations
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
 
     private void deleteTurn(AiMessage node) {
         if (currentSession == null) return;
@@ -1026,11 +1027,11 @@ public class AiChatView {
         return null;
     }
 
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
     //  Helpers
-    // ════════════════════════════════════════
+    // 閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜閳烘劏鏅查埡鎰ㄦ櫜
 
-    private List<String> flatten(List<AiMessage> nodes) {
+    private List<String> flatten(List<AiMessage> nodes, AiConfig cfg) {
         List<String> r = new ArrayList<>();
         for (AiMessage n : nodes) {
             if (n.getUserContent() != null && !n.getUserContent().isBlank()) {
@@ -1038,10 +1039,96 @@ public class AiChatView {
             }
             if (n.getAssistantContent() != null && !n.getAssistantContent().isBlank()
                     && !n.getAssistantContent().startsWith("[Error]")) {
-                r.add("{\"role\":\"assistant\",\"content\":" + jsonStr(n.getAssistantContent()) + "}");
+                r.add(assistantMessageJson(n, cfg));
             }
         }
         return r;
+    }
+
+    private String assistantMessageJson(AiMessage node, AiConfig cfg) {
+        StringBuilder b = new StringBuilder();
+        b.append("{\"role\":\"assistant\",\"content\":").append(jsonStr(node.getAssistantContent()));
+        if (isDeepSeek(cfg) && node.getAssistantReasoningContent() != null && !node.getAssistantReasoningContent().isBlank()) {
+            b.append(",\"reasoning_content\":").append(jsonStr(node.getAssistantReasoningContent()));
+        }
+        b.append("}");
+        return b.toString();
+    }
+
+    private boolean isDeepSeek(AiConfig cfg) {
+        return cfg != null && cfg.isUseOfficialApi()
+                && cfg.resolveOfficialProvider() == AiConfig.OfficialProvider.DEEPSEEK;
+    }
+
+    private String extractMessageContent(JsonElement contentEl) {
+        if (contentEl == null || contentEl.isJsonNull()) return "";
+        if (contentEl.isJsonPrimitive()) return contentEl.getAsString();
+        return contentEl.toString();
+    }
+
+    private String extractReasoningContent(JsonObject message) {
+        if (message == null || !message.has("reasoning_content") || message.get("reasoning_content").isJsonNull()) {
+            return "";
+        }
+        return message.get("reasoning_content").getAsString();
+    }
+
+    private Node createAssistantBubble(AiMessage node) {
+        VBox col = new VBox(6);
+        col.getChildren().add(createBubble(node.getAssistantContent(), false, node));
+
+        String reasoning = node.getAssistantReasoningContent();
+        if (reasoning != null && !reasoning.isBlank()) {
+            VBox reasoningBox = new VBox(6);
+            reasoningBox.setVisible(false);
+            reasoningBox.setManaged(false);
+            reasoningBox.setStyle("-fx-background-color: rgba(15, 23, 48, 0.72); -fx-background-radius: 10; -fx-padding: 10 12;");
+
+            Label title = new Label("Thinking");
+            title.setStyle("-fx-text-fill: #aab4d6; -fx-font-size: 11px; -fx-font-weight: bold;");
+
+            Label text = new Label(reasoning);
+            text.setWrapText(true);
+            text.setMaxWidth(560);
+            text.setStyle("-fx-text-fill: #c7d0ef; -fx-font-size: 12px;");
+
+            reasoningBox.getChildren().addAll(title, text);
+
+            Button toggle = new Button("Show thinking");
+            toggle.setFocusTraversable(false);
+            toggle.setStyle("-fx-background-color: transparent; -fx-text-fill: #8ea0d6; -fx-padding: 0 0 0 16; -fx-cursor: hand;");
+            toggle.setOnAction(e -> {
+                boolean show = !reasoningBox.isVisible();
+                reasoningBox.setVisible(show);
+                reasoningBox.setManaged(show);
+                toggle.setText(show ? "Hide thinking" : "Show thinking");
+            });
+
+            col.getChildren().addAll(toggle, reasoningBox);
+        }
+
+        HBox wrap = new HBox(col);
+        wrap.setAlignment(Pos.CENTER_LEFT);
+        wrap.setPadding(new Insets(2, 16, 2, 16));
+        return wrap;
+    }
+
+    private static final class AssistantReply {
+        private final String content;
+        private final String reasoningContent;
+
+        private AssistantReply(String content, String reasoningContent) {
+            this.content = content;
+            this.reasoningContent = reasoningContent;
+        }
+
+        private String content() {
+            return content;
+        }
+
+        private String reasoningContent() {
+            return reasoningContent;
+        }
     }
 
     private static String jsonStr(String s) {
