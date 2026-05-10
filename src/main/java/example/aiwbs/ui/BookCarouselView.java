@@ -17,7 +17,6 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
 
 import java.io.File;
 import java.util.function.Consumer;
@@ -185,14 +184,6 @@ public class BookCarouselView {
     }
 
     private Image createDefaultCover() {
-        WritableImage image = new WritableImage(250, 334);
-        var writer = image.getPixelWriter();
-        for (int y = 0; y < 334; y++) {
-            for (int x = 0; x < 250; x++) {
-                boolean edge = x < 4 || y < 4 || x > 245 || y > 329;
-                writer.setColor(x, y, edge ? Color.web("#6d7a8a") : Color.web("#d9dee7"));
-            }
-        }
-        return image;
+        return new WritableImage(250, 334);
     }
 }
