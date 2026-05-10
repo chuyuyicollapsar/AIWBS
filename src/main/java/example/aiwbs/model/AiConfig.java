@@ -9,8 +9,8 @@ public class AiConfig implements Serializable {
 
     public enum OfficialProvider {
         OPENAI("OpenAI", "https://api.openai.com/v1"),
-        ANTHROPIC("Anthropic", "https://api.anthropic.com"),
-        GEMINI("Google Gemini", "https://generativelanguage.googleapis.com/v1"),
+        ANTHROPIC("Anthropic", "https://api.anthropic.com/v1/"),
+        GEMINI("Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/"),
         DEEPSEEK("DeepSeek", "https://api.deepseek.com");
 
         public final String label;
@@ -19,6 +19,20 @@ public class AiConfig implements Serializable {
         OfficialProvider(String label, String defaultBaseUrl) {
             this.label = label;
             this.defaultBaseUrl = defaultBaseUrl;
+        }
+    }
+
+    public enum ThinkingEffort {
+        NONE("None"),
+        LOW("Low"),
+        MEDIUM("Medium"),
+        HIGH("High"),
+        MAX("Max");
+
+        public final String label;
+
+        ThinkingEffort(String label) {
+            this.label = label;
         }
     }
 
@@ -32,6 +46,7 @@ public class AiConfig implements Serializable {
     private String officialProvider = OfficialProvider.OPENAI.name();
     private String officialApiKey = "";
     private String officialModelId = "";
+    private String officialThinkingEffort = ThinkingEffort.MEDIUM.name();
 
     // ── Third-party getters/setters ──
 
@@ -93,6 +108,14 @@ public class AiConfig implements Serializable {
         this.officialModelId = officialModelId;
     }
 
+    public String getOfficialThinkingEffort() {
+        return officialThinkingEffort;
+    }
+
+    public void setOfficialThinkingEffort(String officialThinkingEffort) {
+        this.officialThinkingEffort = officialThinkingEffort;
+    }
+
     // ── Helpers ──
 
     public OfficialProvider resolveOfficialProvider() {
@@ -100,6 +123,14 @@ public class AiConfig implements Serializable {
             return OfficialProvider.valueOf(officialProvider);
         } catch (Exception e) {
             return OfficialProvider.OPENAI;
+        }
+    }
+
+    public ThinkingEffort resolveOfficialThinkingEffort() {
+        try {
+            return ThinkingEffort.valueOf(officialThinkingEffort);
+        } catch (Exception e) {
+            return ThinkingEffort.MEDIUM;
         }
     }
 
@@ -111,6 +142,11 @@ public class AiConfig implements Serializable {
     /** Get the effective model ID based on active config type. */
     public String effectiveModelId() {
         return useOfficialApi ? officialModelId : modelId;
+    }
+
+    /** Get the selected reasoning depth for official API use. */
+    public String effectiveThinkingEffort() {
+        return useOfficialApi ? officialThinkingEffort : ThinkingEffort.MEDIUM.name();
     }
 
     /** Get the effective base URL based on active config type. */

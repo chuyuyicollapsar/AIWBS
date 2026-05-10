@@ -115,11 +115,24 @@ public class AiConfigView {
     // ════════════════════════════════════════
 
     private static final Map<String, List<String>> OFFICIAL_MODELS = Map.of(
-            "OPENAI", List.of("gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"),
-            "ANTHROPIC", List.of("claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022",
-                    "claude-3-5-haiku-20241022", "claude-3-opus-20240229"),
-            "GEMINI", List.of("gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-1.5-flash"),
-            "DEEPSEEK", List.of("deepseek-chat", "deepseek-reasoner")
+            "OPENAI", List.of("gpt-5.5", "gpt-5.5-pro", "gpt-5.4",
+                    "gpt-5.4-mini", "gpt-5.4-nano",
+                    "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"),
+            "ANTHROPIC", List.of("claude-opus-4-1-20250805", "claude-opus-4-20250514",
+                    "claude-sonnet-4-20250514", "claude-3-7-sonnet-20250219",
+                    "claude-3-5-haiku-20241022"),
+            "GEMINI", List.of("gemini-3-pro-preview", "gemini-3-flash-preview",
+                    "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite",
+                    "gemini-2.5-flash-preview-09-2025", "gemini-2.5-flash-lite-preview-09-2025"),
+            "DEEPSEEK", List.of("deepseek-v4-flash", "deepseek-v4-pro",
+                    "deepseek-chat", "deepseek-reasoner")
+    );
+
+    private static final Map<String, String> THINKING_HINTS = Map.of(
+            "OPENAI", "OpenAI reasoning.effort supports none, low, medium, high, and xhigh on GPT-5.5 / GPT-5.4.",
+            "ANTHROPIC", "Anthropic extended thinking uses thinking.type=enabled and thinking.budget_tokens.",
+            "GEMINI", "Gemini 3 uses thinking_level; Gemini 2.5 keeps thinking_budget / reasoning_effort compatibility.",
+            "DEEPSEEK", "DeepSeek uses thinking.type plus reasoning_effort high/max; low and medium map to high."
     );
 
     private Tab buildOfficialTab() {
@@ -147,7 +160,24 @@ public class AiConfigView {
         modelBox.setPrefWidth(300);
         modelBox.setEditable(true);
         updateModelList(modelBox, cfg.getOfficialProvider());
-        modelBox.setValue(cfg.getOfficialModelId());
+        modelBox.setValue(selectInitialModel(cfg.getOfficialProvider(), cfg.getOfficialModelId()));
+
+        ComboBox<String> thinkingBox = new ComboBox<>(
+                FXCollections.observableArrayList(
+                        AiConfig.ThinkingEffort.NONE.name(),
+                        AiConfig.ThinkingEffort.LOW.name(),
+                        AiConfig.ThinkingEffort.MEDIUM.name(),
+                        AiConfig.ThinkingEffort.HIGH.name(),
+                        AiConfig.ThinkingEffort.MAX.name()
+                )
+        );
+        thinkingBox.setValue(cfg.resolveOfficialThinkingEffort().name());
+        thinkingBox.setPrefWidth(160);
+
+        Label thinkingHint = new Label(thinkingHint(cfg.getOfficialProvider()));
+        thinkingHint.setWrapText(true);
+        thinkingHint.setMaxWidth(520);
+        thinkingHint.setStyle("-fx-text-fill: #666; -fx-font-size: 12px;");
 
         TextField baseUrlDisplay = new TextField(cfg.resolveOfficialProvider().defaultBaseUrl);
         baseUrlDisplay.setEditable(false);
@@ -161,20 +191,22 @@ public class AiConfigView {
         grid.addRow(0, label("Provider"), providerBox);
         grid.addRow(1, label("API Key"), officialApiKey);
         grid.addRow(2, label("Model"), modelBox);
-        grid.addRow(3, label("Base URL"), baseUrlDisplay);
+        grid.addRow(3, label("Thinking"), new VBox(4, thinkingBox, thinkingHint));
+        grid.addRow(4, label("Base URL"), baseUrlDisplay);
 
         HBox actions = new HBox(10);
         Button save = new Button("Save Config");
         Button test = new Button("Test Connection");
         actions.getChildren().addAll(save, test);
-        grid.add(actions, 1, 4);
-        grid.add(label("Result"), 0, 5);
-        grid.add(result, 1, 5);
+        grid.add(actions, 1, 5);
+        grid.add(label("Result"), 0, 6);
+        grid.add(result, 1, 6);
 
         providerBox.setOnAction(e -> {
             String provider = providerBox.getValue();
             updateModelList(modelBox, provider);
             modelBox.getSelectionModel().selectFirst();
+            thinkingHint.setText(thinkingHint(provider));
             for (AiConfig.OfficialProvider p : AiConfig.OfficialProvider.values()) {
                 if (p.name().equals(provider)) {
                     baseUrlDisplay.setText(p.defaultBaseUrl);
@@ -187,6 +219,7 @@ public class AiConfigView {
             cfg.setOfficialProvider(providerBox.getValue());
             cfg.setOfficialApiKey(officialApiKey.getText());
             cfg.setOfficialModelId(modelBox.getValue());
+            cfg.setOfficialThinkingEffort(thinkingBox.getValue());
             cfg.setUseOfficialApi(true);
             store.save(state);
             result.setText("Configuration saved.");
@@ -196,6 +229,7 @@ public class AiConfigView {
             cfg.setOfficialProvider(providerBox.getValue());
             cfg.setOfficialApiKey(officialApiKey.getText());
             cfg.setOfficialModelId(modelBox.getValue());
+            cfg.setOfficialThinkingEffort(thinkingBox.getValue());
             cfg.setUseOfficialApi(true);
             store.save(state);
             result.setText("Testing...");
@@ -223,6 +257,18 @@ public class AiConfigView {
     private void updateModelList(ComboBox<String> modelBox, String provider) {
         List<String> models = OFFICIAL_MODELS.getOrDefault(provider, List.of());
         modelBox.setItems(FXCollections.observableArrayList(models));
+    }
+
+    private String selectInitialModel(String provider, String configured) {
+        if (configured != null && !configured.isBlank()) {
+            return configured;
+        }
+        List<String> models = OFFICIAL_MODELS.getOrDefault(provider, List.of());
+        return models.isEmpty() ? "" : models.getFirst();
+    }
+
+    private String thinkingHint(String provider) {
+        return THINKING_HINTS.getOrDefault(provider, "Provider-specific thinking parameter.");
     }
 
     private static Label label(String text) {
