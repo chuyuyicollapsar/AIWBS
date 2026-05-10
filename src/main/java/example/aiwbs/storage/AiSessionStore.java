@@ -12,11 +12,13 @@ import java.util.Comparator;
 import java.util.List;
 
 public class AiSessionStore {
+    private static final Path AI_BOOKS_DIR = Path.of(System.getProperty("user.home"), ".aiwbs", "ai", "books");
+
     private final Path sessionsDir;
     private final Gson gson;
 
     public AiSessionStore(String bookId) {
-        this.sessionsDir = Path.of(System.getProperty("user.home"), ".aiwbs", "ai", "books", bookId, "sessions");
+        this.sessionsDir = AI_BOOKS_DIR.resolve(bookId).resolve("sessions");
         this.gson = new GsonBuilder().setPrettyPrinting().create();
     }
 
@@ -61,6 +63,26 @@ public class AiSessionStore {
     public void delete(AiSession session) {
         try {
             Files.deleteIfExists(sessionsDir.resolve(session.getId() + ".json"));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void deleteBookData(String bookId) {
+        if (bookId == null || bookId.isBlank() || bookId.contains("/") || bookId.contains("\\")) return;
+
+        Path root = AI_BOOKS_DIR.toAbsolutePath().normalize();
+        Path target = root.resolve(bookId).normalize();
+        if (!target.startsWith(root) || !Files.exists(target)) return;
+
+        try (var paths = Files.walk(target)) {
+            paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            });
         } catch (IOException e) {
             e.printStackTrace();
         }

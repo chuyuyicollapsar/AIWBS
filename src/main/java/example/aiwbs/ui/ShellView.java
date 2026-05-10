@@ -5,6 +5,7 @@ import example.aiwbs.model.Book;
 import example.aiwbs.model.Chapter;
 import example.aiwbs.model.OutlineNode;
 import example.aiwbs.model.Volume;
+import example.aiwbs.storage.AiSessionStore;
 import example.aiwbs.storage.StateStore;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -23,6 +24,7 @@ import javafx.scene.layout.StackPane;
 import javafx.stage.FileChooser;
 
 import java.io.File;
+import java.util.Objects;
 
 import static example.aiwbs.ui.ViewUtils.*;
 
@@ -66,6 +68,7 @@ public class ShellView {
 
     // ── Cached ──
     private AiChatView aiChatView;
+    private String aiChatBookId;
 
     // ── Navigation history ──
     private WorkspaceType previousTypeBeforeSettings;
@@ -133,8 +136,11 @@ public class ShellView {
     }
 
     private AiChatView getAiChatView() {
-        if (aiChatView == null) {
-            aiChatView = new AiChatView(state, store, getAiContextBook());
+        Book contextBook = getAiContextBook();
+        String contextBookId = contextBook.getId();
+        if (aiChatView == null || !Objects.equals(aiChatBookId, contextBookId)) {
+            aiChatView = new AiChatView(state, store, contextBook);
+            aiChatBookId = contextBookId;
         }
         return aiChatView;
     }
@@ -398,12 +404,17 @@ public class ShellView {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Delete this book?", ButtonType.OK, ButtonType.CANCEL);
         styleDialog(alert.getDialogPane());
         alert.showAndWait().filter(ButtonType.OK::equals).ifPresent(ok -> {
-            state.getBooks().remove(selectedBook);
+            Book deletedBook = selectedBook;
+            state.getBooks().remove(deletedBook);
             selectedBookIndex = Math.min(selectedBookIndex, state.getBooks().size() - 1);
             selectedBook = selectedBookIndex >= 0 ? state.getBooks().get(selectedBookIndex) : null;
             selectedVolume = null;
             selectedChapter = null;
+            selectedOutlineNode = null;
+            aiChatView = null;
+            aiChatBookId = null;
             store.save(state);
+            AiSessionStore.deleteBookData(deletedBook.getId());
             switchTo(WorkspaceType.BOOK_CAROUSEL);
         });
     }
