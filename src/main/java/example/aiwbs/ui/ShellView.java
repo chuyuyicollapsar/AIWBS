@@ -24,7 +24,9 @@ import javafx.scene.layout.StackPane;
 import javafx.stage.FileChooser;
 
 import java.io.File;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 
 import static example.aiwbs.ui.ViewUtils.*;
 
@@ -63,6 +65,7 @@ public class ShellView {
     private boolean chapterSidebarCollapsed;
     private boolean historySidebarVisible;
     private boolean outlineSidebarCollapsed;
+    private final Set<String> collapsedOutlineNodeIds = new HashSet<>();
     private double volumeSidebarWidth = 240;
     private double chapterSidebarWidth = 260;
 
@@ -437,6 +440,7 @@ public class ShellView {
     boolean isChapterSidebarCollapsed() { return chapterSidebarCollapsed; }
     boolean isHistorySidebarVisible() { return historySidebarVisible; }
     boolean isOutlineSidebarCollapsed() { return outlineSidebarCollapsed; }
+    boolean isOutlineNodeCollapsed(String nodeId) { return collapsedOutlineNodeIds.contains(nodeId); }
     double getVolumeSidebarWidth() { return volumeSidebarWidth; }
     double getChapterSidebarWidth() { return chapterSidebarWidth; }
 
@@ -444,6 +448,13 @@ public class ShellView {
     void setChapterSidebarCollapsed(boolean v) { this.chapterSidebarCollapsed = v; }
     void setHistorySidebarVisible(boolean v) { this.historySidebarVisible = v; }
     void setOutlineSidebarCollapsed(boolean v) { this.outlineSidebarCollapsed = v; }
+    void setOutlineNodeCollapsed(String nodeId, boolean collapsed) {
+        if (collapsed) {
+            collapsedOutlineNodeIds.add(nodeId);
+        } else {
+            collapsedOutlineNodeIds.remove(nodeId);
+        }
+    }
     void setVolumeSidebarWidth(double w) { this.volumeSidebarWidth = w; }
     void setChapterSidebarWidth(double w) { this.chapterSidebarWidth = w; }
 

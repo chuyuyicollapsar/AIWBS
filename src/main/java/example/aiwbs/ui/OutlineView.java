@@ -146,7 +146,9 @@ public class OutlineView {
 
     private TreeItem<OutlineNode> buildTreeItem(OutlineNode node) {
         TreeItem<OutlineNode> item = new TreeItem<>(node);
-        item.setExpanded(true);
+        item.setExpanded(!shellView.isOutlineNodeCollapsed(node.getId()));
+        item.expandedProperty().addListener((obs, wasExpanded, isExpanded) ->
+                shellView.setOutlineNodeCollapsed(node.getId(), !isExpanded));
         for (OutlineNode child : node.getChildren()) {
             item.getChildren().add(buildTreeItem(child));
         }
