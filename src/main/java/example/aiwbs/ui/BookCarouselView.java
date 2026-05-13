@@ -18,7 +18,6 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
-import java.io.File;
 import java.util.function.Consumer;
 
 /**
@@ -176,7 +175,10 @@ public class BookCarouselView {
     private Image loadCover(Book book) {
         try {
             if (book.getCoverPath() != null && !book.getCoverPath().isBlank()) {
-                return new Image(new File(book.getCoverPath()).toURI().toString(), 250, 334, false, true);
+                var cover = store.resolveProjectFile(book.getCoverPath());
+                if (cover != null) {
+                    return new Image(cover.toUri().toString(), 250, 334, false, true);
+                }
             }
         } catch (Exception ignored) {
         }

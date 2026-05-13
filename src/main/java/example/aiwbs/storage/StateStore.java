@@ -3,6 +3,7 @@ package example.aiwbs.storage;
 import example.aiwbs.model.AppState;
 import example.aiwbs.model.Book;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -35,5 +36,13 @@ public class StateStore {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public String importCover(Book book, Path source) throws IOException {
+        return bookStore.importCover(book, source);
+    }
+
+    public Path resolveProjectFile(String path) {
+        return bookStore.resolveProjectFile(path);
     }
 }

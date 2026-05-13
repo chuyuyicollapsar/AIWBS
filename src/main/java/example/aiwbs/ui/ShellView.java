@@ -397,8 +397,12 @@ public class ShellView {
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Image Files", "*.png", "*.jpg", "*.jpeg", "*.webp"));
         File file = chooser.showOpenDialog(root.getScene().getWindow());
         if (file != null) {
-            selectedBook.setCoverPath(file.getAbsolutePath());
-            store.save(state);
+            try {
+                selectedBook.setCoverPath(store.importCover(selectedBook, file.toPath()));
+                store.save(state);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
         }
     }
 
