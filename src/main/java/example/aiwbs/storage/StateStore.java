@@ -10,6 +10,7 @@ import java.util.List;
 public class StateStore {
     private final SettingsStore settingsStore;
     private final BookStore bookStore;
+    private final PackageStore packageStore;
 
     public StateStore() {
         this(Path.of(System.getProperty("user.home"), ".aiwbs"));
@@ -18,6 +19,7 @@ public class StateStore {
     StateStore(Path dataDir) {
         this.settingsStore = new SettingsStore(dataDir);
         this.bookStore = new BookStore(dataDir);
+        this.packageStore = new PackageStore(dataDir, bookStore);
     }
 
     public AppState load() {
@@ -44,5 +46,16 @@ public class StateStore {
 
     public Path resolveProjectFile(String path) {
         return bookStore.resolveProjectFile(path);
+    }
+
+    public PackageTransferResult exportPackage(AppState state, Path target) throws IOException {
+        save(state);
+        return packageStore.exportPackage(state, target);
+    }
+
+    public PackageTransferResult importPackage(AppState state, Path source) throws IOException {
+        PackageTransferResult result = packageStore.importPackage(state, source);
+        save(state);
+        return result;
     }
 }

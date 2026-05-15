@@ -104,7 +104,7 @@ final class BookStore {
         loadedBookFileIds = new HashSet<>(liveIds);
     }
 
-    private Book load(Path file) {
+    Book load(Path file) {
         try {
             BookData data = gson.fromJson(Files.readString(file, StandardCharsets.UTF_8), BookData.class);
             return data == null ? null : data.toBook();

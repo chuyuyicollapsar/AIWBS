@@ -6,6 +6,7 @@ import example.aiwbs.model.Chapter;
 import example.aiwbs.model.OutlineNode;
 import example.aiwbs.model.Volume;
 import example.aiwbs.storage.AiSessionStore;
+import example.aiwbs.storage.PackageTransferResult;
 import example.aiwbs.storage.StateStore;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -286,8 +287,9 @@ public class ShellView {
                 || currentType == WorkspaceType.DETAIL_OUTLINE;
         toolbarCenter.setVisible(inWorkspace);
         toolbarCenter.setManaged(inWorkspace);
-        toolbarRight.setVisible(inWorkspace);
-        toolbarRight.setManaged(inWorkspace);
+        boolean showRightMenu = inWorkspace || currentType == WorkspaceType.BOOK_CAROUSEL;
+        toolbarRight.setVisible(showRightMenu);
+        toolbarRight.setManaged(showRightMenu);
 
         if (inWorkspace) {
             setCenterVisible(outlineTreeBtn, true);
@@ -342,17 +344,27 @@ public class ShellView {
     // ════════════════════════════════════════
 
     private void showBookMenu() {
-        if (selectedBook == null) return;
         ContextMenu menu = new ContextMenu();
-        MenuItem rename = new MenuItem("Rename Book");
-        rename.setOnAction(e -> renameBook());
-        MenuItem summary = new MenuItem("Edit Summary");
-        summary.setOnAction(e -> editSummary());
-        MenuItem cover = new MenuItem("Upload Cover");
-        cover.setOnAction(e -> chooseCover());
-        MenuItem delete = new MenuItem("Delete Book");
-        delete.setOnAction(e -> deleteSelectedBook());
-        menu.getItems().addAll(rename, summary, cover, delete);
+        if (selectedBook != null) {
+            MenuItem rename = new MenuItem("Rename Book");
+            rename.setOnAction(e -> renameBook());
+            MenuItem summary = new MenuItem("Edit Summary");
+            summary.setOnAction(e -> editSummary());
+            MenuItem cover = new MenuItem("Upload Cover");
+            cover.setOnAction(e -> chooseCover());
+            menu.getItems().addAll(rename, summary, cover);
+        }
+        MenuItem exportPackage = new MenuItem("Export Library Package");
+        exportPackage.setDisable(state.getBooks().isEmpty());
+        exportPackage.setOnAction(e -> exportPackage());
+        MenuItem importPackage = new MenuItem("Import Library Package");
+        importPackage.setOnAction(e -> importPackage());
+        menu.getItems().addAll(exportPackage, importPackage);
+        if (selectedBook != null) {
+            MenuItem delete = new MenuItem("Delete Book");
+            delete.setOnAction(e -> deleteSelectedBook());
+            menu.getItems().add(delete);
+        }
         menu.show(bookMenuBtn, Side.BOTTOM, 0, 0);
     }
 
@@ -403,6 +415,51 @@ public class ShellView {
             } catch (Exception ex) {
                 ex.printStackTrace();
             }
+        }
+    }
+
+    private void exportPackage() {
+        FileChooser chooser = new FileChooser();
+        chooser.setInitialFileName("aiwbs-library.aiwbspack");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("AIWBS Package", "*.aiwbspack", "*.zip"));
+        File file = chooser.showSaveDialog(root.getScene().getWindow());
+        if (file == null) return;
+        try {
+            PackageTransferResult result = store.exportPackage(state, file.toPath());
+            showInfo("Export complete", "Exported " + result.bookCount() + " books and " + result.sessionCount() + " AI sessions.");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            showError("Export failed", ex.getMessage());
+        }
+    }
+
+    private void importPackage() {
+        FileChooser chooser = new FileChooser();
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("AIWBS Package", "*.aiwbspack", "*.zip"));
+        File file = chooser.showOpenDialog(root.getScene().getWindow());
+        if (file == null) return;
+        try {
+            PackageTransferResult result = store.importPackage(state, file.toPath());
+            if (!result.bookIds().isEmpty()) {
+                String firstImportedId = result.bookIds().get(0);
+                for (int i = 0; i < state.getBooks().size(); i++) {
+                    if (Objects.equals(state.getBooks().get(i).getId(), firstImportedId)) {
+                        selectedBookIndex = i;
+                        selectedBook = state.getBooks().get(i);
+                        break;
+                    }
+                }
+            }
+            selectedVolume = selectedBook == null || selectedBook.getVolumes().isEmpty() ? null : selectedBook.getVolumes().get(0);
+            selectedChapter = selectedVolume == null || selectedVolume.getChapters().isEmpty() ? null : selectedVolume.getChapters().get(0);
+            selectedOutlineNode = null;
+            aiChatView = null;
+            aiChatBookId = null;
+            switchTo(WorkspaceType.BOOK_CAROUSEL);
+            showInfo("Import complete", "Imported " + result.bookCount() + " books and " + result.sessionCount() + " AI sessions.");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            showError("Import failed", ex.getMessage());
         }
     }
 
@@ -466,5 +523,21 @@ public class ShellView {
 
     private void refreshCurrentView() {
         switchTo(currentType);
+    }
+
+    private void showInfo(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        styleDialog(alert.getDialogPane());
+        alert.showAndWait();
+    }
+
+    private void showError(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR, message == null || message.isBlank() ? title : message, ButtonType.OK);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        styleDialog(alert.getDialogPane());
+        alert.showAndWait();
     }
 }
