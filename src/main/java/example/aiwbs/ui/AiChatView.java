@@ -1,11 +1,8 @@
 package example.aiwbs.ui;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import example.aiwbs.ai.AiClient;
-import example.aiwbs.ai.ToolDefinitions;
 import example.aiwbs.model.AiConfig;
 import example.aiwbs.model.AiMessage;
 import example.aiwbs.model.AiSession;
@@ -32,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * AI chat session view.
@@ -69,6 +67,8 @@ public class AiChatView {
     private AiSession currentSession;
     private final Map<String, String> branchSel = new HashMap<>();
     private final Set<String> pendingAssistantNodes = new HashSet<>();
+    private final Set<String> expandedReasoningNodes = new HashSet<>();
+    private final Set<String> collapsedReasoningNodes = new HashSet<>();
     private List<AiMessage> currentPath = new ArrayList<>();
     private boolean sessionVis = true;
     private boolean navVis = true;
@@ -341,6 +341,8 @@ public class AiChatView {
         currentSession = s;
         branchSel.clear();
         pendingAssistantNodes.clear();
+        expandedReasoningNodes.clear();
+        collapsedReasoningNodes.clear();
         pathNodeFocusedIdx = 0;
         loadSessions();
         scrollToMessageNode(0);
@@ -377,6 +379,8 @@ public class AiChatView {
                 currentSession = null;
                 branchSel.clear();
                 pendingAssistantNodes.clear();
+                expandedReasoningNodes.clear();
+                collapsedReasoningNodes.clear();
                 List<AiSession> rem = store.loadAll();
                 if (!rem.isEmpty()) selectSession(rem.getFirst());
                 else { loadSessions(); refreshNav(); refreshMessages(); }
@@ -668,7 +672,9 @@ public class AiChatView {
                 if (n.getUserContent() != null && !n.getUserContent().isBlank()) {
                     block.getChildren().add(createBubble(n.getUserContent(), true, n));
                 }
-                if (n.getAssistantContent() != null && !n.getAssistantContent().isBlank()) {
+                boolean hasAssistantContent = n.getAssistantContent() != null && !n.getAssistantContent().isBlank();
+                boolean hasReasoningContent = n.getAssistantReasoningContent() != null && !n.getAssistantReasoningContent().isBlank();
+                if (hasAssistantContent || hasReasoningContent) {
                     block.getChildren().add(createAssistantBubble(n));
                 } else if (pendingAssistantNodes.contains(n.getId())) {
                     block.getChildren().add(createBubble("AI thinking...", false, n));
@@ -773,11 +779,10 @@ public class AiChatView {
 
         AiConfig cfg = appState.getAiConfig();
         List<String> messages = flatten(apiCtx, cfg);
-        String toolsJson = ToolDefinitions.getToolsJson();
 
         new Thread(() -> {
             try {
-                AssistantReply resp = callWithTools(cfg, SYSTEM_PROMPT, messages, toolsJson, 0);
+                AssistantReply resp = streamWithTools(cfg, SYSTEM_PROMPT, messages, node);
                 Platform.runLater(() -> {
                     node.setAssistantContent(resp.content());
                     node.setAssistantReasoningContent(resp.reasoningContent());
@@ -792,7 +797,7 @@ public class AiChatView {
             } catch (Exception e) {
                 Platform.runLater(() -> {
                     String m = e.getMessage();
-                    node.setAssistantContent("[Error] " + (m != null ? m : "unknown"));
+                    node.setAssistantContent(appendError(node.getAssistantContent(), m));
                     pendingAssistantNodes.remove(node.getId());
                     store.save(session);
                     if (isCurrentSession(session)) {
@@ -805,37 +810,82 @@ public class AiChatView {
         }).start();
     }
 
-    /**
-     * Recursive chat loop with tool calls, max 10 rounds.
-    */
-    private AssistantReply callWithTools(AiConfig cfg, String sys, List<String> messages,
-                                         String toolsJson, int depth) throws Exception {
-        if (depth > 10) return new AssistantReply("[Error] Tool call loop exceeded max depth", "");
+    private AssistantReply streamWithTools(AiConfig cfg, String sys, List<String> messages, AiMessage node) throws Exception {
+        AtomicBoolean firstContent = new AtomicBoolean(true);
+        AtomicBoolean firstReasoning = new AtomicBoolean(true);
+        AiClient.ChatResult result = aiClient.streamWithTools(
+                cfg,
+                sys,
+                messages,
+                this::executeTool,
+                new AiClient.StreamListener() {
+                    @Override
+                    public void onContentDelta(String delta) {
+                        Platform.runLater(() -> {
+                            if (firstContent.getAndSet(false)) {
+                                node.setAssistantContent("");
+                            }
+                            node.setAssistantContent((node.getAssistantContent() == null ? "" : node.getAssistantContent()) + delta);
+                            if (isCurrentSession(node)) {
+                                refreshMessages();
+                                scrollToBottom();
+                            }
+                        });
+                    }
 
-        String resp = aiClient.chatRaw(cfg, sys, messages, toolsJson);
-        JsonObject root = JsonParser.parseString(resp).getAsJsonObject();
-        JsonObject choice = root.getAsJsonArray("choices").get(0).getAsJsonObject();
-        String finishReason = choice.get("finish_reason").getAsString();
-        JsonObject msg = choice.getAsJsonObject("message");
+                    @Override
+                    public void onReasoningDelta(String delta) {
+                        Platform.runLater(() -> {
+                            if (firstReasoning.getAndSet(false)) {
+                                node.setAssistantReasoningContent("");
+                                if (!collapsedReasoningNodes.contains(node.getId())) {
+                                    expandedReasoningNodes.add(node.getId());
+                                }
+                            }
+                            node.setAssistantReasoningContent((node.getAssistantReasoningContent() == null ? "" : node.getAssistantReasoningContent()) + delta);
+                            if (isCurrentSession(node)) {
+                                refreshMessages();
+                                scrollToBottom();
+                            }
+                        });
+                    }
 
-        if (!"tool_calls".equals(finishReason)) {
-            return new AssistantReply(extractMessageContent(msg.get("content")), extractReasoningContent(msg));
-        }
+                    @Override
+                    public void onContentReplace(String content) {
+                        Platform.runLater(() -> {
+                            node.setAssistantContent(content);
+                            if (isCurrentSession(node)) {
+                                refreshMessages();
+                                scrollToBottom();
+                            }
+                        });
+                    }
 
-        messages.add(msg.toString());
+                    @Override
+                    public void onReasoningReplace(String reasoning) {
+                        Platform.runLater(() -> {
+                            node.setAssistantReasoningContent(reasoning);
+                            if (isCurrentSession(node)) {
+                                refreshMessages();
+                            }
+                        });
+                    }
 
-        JsonArray toolCalls = msg.getAsJsonArray("tool_calls");
-        for (JsonElement tc : toolCalls) {
-            JsonObject toolCall = tc.getAsJsonObject();
-            String toolCallId = toolCall.get("id").getAsString();
-            String funcName = toolCall.getAsJsonObject("function").get("name").getAsString();
-            String argsStr = toolCall.getAsJsonObject("function").get("arguments").getAsString();
-            String result = executeTool(funcName, argsStr);
-            messages.add("{\"role\":\"tool\",\"tool_call_id\":\"" + toolCallId
-                    + "\",\"content\":" + jsonStr(result) + "}");
-        }
-
-        return callWithTools(cfg, sys, messages, toolsJson, depth + 1);
+                    @Override
+                    public void onToolCall(String toolName) {
+                        Platform.runLater(() -> {
+                            if (node.getAssistantContent() == null || node.getAssistantContent().isBlank()) {
+                                node.setAssistantContent("Reading book context...");
+                                if (isCurrentSession(node)) {
+                                    refreshMessages();
+                                    scrollToBottom();
+                                }
+                            }
+                        });
+                    }
+                }
+        );
+        return new AssistantReply(result.content(), result.reasoningContent());
     }
 
 
@@ -903,10 +953,9 @@ public class AiChatView {
             AiConfig cfg = appState.getAiConfig();
             List<AiMessage> ctx = currentPath;
             List<String> json = flatten(ctx, cfg);
-            String toolsJson = ToolDefinitions.getToolsJson();
             new Thread(() -> {
                 try {
-                    AssistantReply resp = callWithTools(cfg, SYSTEM_PROMPT, json, toolsJson, 0);
+                    AssistantReply resp = streamWithTools(cfg, SYSTEM_PROMPT, json, sib);
                     Platform.runLater(() -> {
                         sib.setAssistantContent(resp.content());
                         sib.setAssistantReasoningContent(resp.reasoningContent());
@@ -921,7 +970,7 @@ public class AiChatView {
                 } catch (Exception e) {
                     Platform.runLater(() -> {
                         String m = e.getMessage();
-                        sib.setAssistantContent("[Error] " + (m != null ? m : "unknown"));
+                        sib.setAssistantContent(appendError(sib.getAssistantContent(), m));
                         pendingAssistantNodes.remove(sib.getId());
                         store.save(session);
                         if (isCurrentSession(session)) {
@@ -1060,28 +1109,15 @@ public class AiChatView {
                 && cfg.resolveOfficialProvider() == AiConfig.OfficialProvider.DEEPSEEK;
     }
 
-    private String extractMessageContent(JsonElement contentEl) {
-        if (contentEl == null || contentEl.isJsonNull()) return "";
-        if (contentEl.isJsonPrimitive()) return contentEl.getAsString();
-        return contentEl.toString();
-    }
-
-    private String extractReasoningContent(JsonObject message) {
-        if (message == null || !message.has("reasoning_content") || message.get("reasoning_content").isJsonNull()) {
-            return "";
-        }
-        return message.get("reasoning_content").getAsString();
-    }
-
     private Node createAssistantBubble(AiMessage node) {
         VBox col = new VBox(6);
-        col.getChildren().add(createBubble(node.getAssistantContent(), false, node));
 
         String reasoning = node.getAssistantReasoningContent();
         if (reasoning != null && !reasoning.isBlank()) {
             VBox reasoningBox = new VBox(6);
-            reasoningBox.setVisible(false);
-            reasoningBox.setManaged(false);
+            boolean expanded = shouldShowReasoning(node);
+            reasoningBox.setVisible(expanded);
+            reasoningBox.setManaged(expanded);
             reasoningBox.setStyle("-fx-background-color: rgba(15, 23, 48, 0.72); -fx-background-radius: 10; -fx-padding: 10 12;");
 
             Label title = new Label("Thinking");
@@ -1094,11 +1130,18 @@ public class AiChatView {
 
             reasoningBox.getChildren().addAll(title, text);
 
-            Button toggle = new Button("Show thinking");
+            Button toggle = new Button(expanded ? "Hide thinking" : "Show thinking");
             toggle.setFocusTraversable(false);
-            toggle.setStyle("-fx-background-color: transparent; -fx-text-fill: #8ea0d6; -fx-padding: 0 0 0 16; -fx-cursor: hand;");
+            toggle.setStyle("-fx-background-color: transparent; -fx-text-fill: #8ea0d6; -fx-padding: 0 0 0 0; -fx-cursor: hand;");
             toggle.setOnAction(e -> {
                 boolean show = !reasoningBox.isVisible();
+                if (show) {
+                    expandedReasoningNodes.add(node.getId());
+                    collapsedReasoningNodes.remove(node.getId());
+                } else {
+                    expandedReasoningNodes.remove(node.getId());
+                    collapsedReasoningNodes.add(node.getId());
+                }
                 reasoningBox.setVisible(show);
                 reasoningBox.setManaged(show);
                 toggle.setText(show ? "Hide thinking" : "Show thinking");
@@ -1107,10 +1150,26 @@ public class AiChatView {
             col.getChildren().addAll(toggle, reasoningBox);
         }
 
+        String content = node.getAssistantContent();
+        if (content != null && !content.isBlank()) {
+            col.getChildren().add(createBubble(content, false, node));
+        } else if (pendingAssistantNodes.contains(node.getId())) {
+            Label pending = new Label("Answer will appear after thinking...");
+            pending.setStyle("-fx-text-fill: rgba(231,236,255,0.55); -fx-font-size: 12px; -fx-padding: 0 0 0 0;");
+            col.getChildren().add(pending);
+        }
+
         HBox wrap = new HBox(col);
         wrap.setAlignment(Pos.CENTER_LEFT);
         wrap.setPadding(new Insets(2, 16, 2, 16));
         return wrap;
+    }
+
+    private boolean shouldShowReasoning(AiMessage node) {
+        if (collapsedReasoningNodes.contains(node.getId())) return false;
+        if (expandedReasoningNodes.contains(node.getId())) return true;
+        return pendingAssistantNodes.contains(node.getId())
+                && (node.getAssistantContent() == null || node.getAssistantContent().isBlank());
     }
 
     private static final class AssistantReply {
@@ -1140,6 +1199,10 @@ public class AiChatView {
         return currentSession != null && currentSession.getId().equals(session.getId());
     }
 
+    private boolean isCurrentSession(AiMessage node) {
+        return currentPath.contains(node);
+    }
+
     private void scrollToBottom() {
         if (messageScroll == null) return;
         pendingBottomScrollPulses = Math.max(pendingBottomScrollPulses, 2);
@@ -1167,5 +1230,13 @@ public class AiChatView {
 
     private static String makeTitle() {
         return LocalDateTime.now().format(TTL);
+    }
+
+    private static String appendError(String existing, String message) {
+        String error = "[Error] " + (message != null ? message : "unknown");
+        if (existing == null || existing.isBlank() || "Reading book context...".equals(existing)) {
+            return error;
+        }
+        return existing + "\n\n" + error;
     }
 }

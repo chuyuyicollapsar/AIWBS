@@ -5,10 +5,15 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import dev.langchain4j.agent.tool.ToolSpecification;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
+import java.util.List;
 
 public class ToolDefinitions {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static String cached;
+    private static List<ToolSpecification> cachedLangChainTools;
 
     public static String getToolsJson() {
         if (cached != null) return cached;
@@ -36,6 +41,57 @@ public class ToolDefinitions {
                    "required", arr("volume_name", "chapter_name"))));
         cached = GSON.toJson(tools);
         return cached;
+    }
+
+    public static List<ToolSpecification> langChainTools() {
+        if (cachedLangChainTools != null) return cachedLangChainTools;
+        cachedLangChainTools = List.of(
+                tool(
+                        "get_table_of_contents",
+                        "Get the current book table of contents: all volume names, chapter names, and chapter word counts.",
+                        JsonObjectSchema.builder().build()
+                ),
+                tool(
+                        "get_outline_tree",
+                        "Get the current book outline tree as JSON. The children array is the only source of parent-child structure; headings inside content are plain text.",
+                        JsonObjectSchema.builder().build()
+                ),
+                tool(
+                        "get_volume_outline",
+                        "Get the detailed outline for a specific volume.",
+                        JsonObjectSchema.builder()
+                                .addStringProperty("volume_name", "Volume name. Use the exact full name from the table of contents.")
+                                .required("volume_name")
+                                .build()
+                ),
+                tool(
+                        "get_chapter_outline",
+                        "Get the detailed outline for a specific chapter.",
+                        JsonObjectSchema.builder()
+                                .addStringProperty("volume_name", "Volume name. Use the exact full name from the table of contents.")
+                                .addStringProperty("chapter_name", "Chapter name. Use the exact full name from the table of contents.")
+                                .required("volume_name", "chapter_name")
+                                .build()
+                ),
+                tool(
+                        "get_chapter_content",
+                        "Get the full prose content for a specific chapter. Content may be long; inspect the chapter outline first when possible.",
+                        JsonObjectSchema.builder()
+                                .addStringProperty("volume_name", "Volume name. Use the exact full name from the table of contents.")
+                                .addStringProperty("chapter_name", "Chapter name. Use the exact full name from the table of contents.")
+                                .required("volume_name", "chapter_name")
+                                .build()
+                )
+        );
+        return cachedLangChainTools;
+    }
+
+    private static ToolSpecification tool(String name, String description, JsonObjectSchema parameters) {
+        return ToolSpecification.builder()
+                .name(name)
+                .description(description)
+                .parameters(parameters)
+                .build();
     }
 
     private static JsonObject func(String name, String description) {
