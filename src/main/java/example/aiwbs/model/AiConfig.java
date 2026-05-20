@@ -36,10 +36,23 @@ public class AiConfig implements Serializable {
         }
     }
 
+    public enum AiProtocol {
+        CHAT_COMPLETIONS("Chat Completions"),
+        RESPONSES("Responses"),
+        ANTHROPIC_MESSAGES("Anthropic Messages");
+
+        public final String label;
+
+        AiProtocol(String label) {
+            this.label = label;
+        }
+    }
+
     // Third-party fields
     private String baseUrl = "";
     private String apiKey = "";
     private String modelId = "";
+    private String thirdPartyProtocol = AiProtocol.CHAT_COMPLETIONS.name();
 
     // Official API fields
     private boolean useOfficialApi = false;
@@ -72,6 +85,14 @@ public class AiConfig implements Serializable {
 
     public void setModelId(String modelId) {
         this.modelId = modelId;
+    }
+
+    public String getThirdPartyProtocol() {
+        return thirdPartyProtocol;
+    }
+
+    public void setThirdPartyProtocol(String thirdPartyProtocol) {
+        this.thirdPartyProtocol = thirdPartyProtocol;
     }
 
     // ── Official API getters/setters ──
@@ -131,6 +152,14 @@ public class AiConfig implements Serializable {
             return ThinkingEffort.valueOf(officialThinkingEffort);
         } catch (Exception e) {
             return ThinkingEffort.MEDIUM;
+        }
+    }
+
+    public AiProtocol resolveThirdPartyProtocol() {
+        try {
+            return AiProtocol.valueOf(thirdPartyProtocol);
+        } catch (Exception e) {
+            return AiProtocol.CHAT_COMPLETIONS;
         }
     }
 

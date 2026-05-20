@@ -56,27 +56,36 @@ public class AiConfigView {
         PasswordField apiKey = new PasswordField();
         apiKey.setText(cfg.getApiKey());
         TextField modelId = new TextField(cfg.getModelId());
+        ComboBox<String> protocolBox = new ComboBox<>(FXCollections.observableArrayList(
+                AiConfig.AiProtocol.CHAT_COMPLETIONS.name(),
+                AiConfig.AiProtocol.RESPONSES.name(),
+                AiConfig.AiProtocol.ANTHROPIC_MESSAGES.name()
+        ));
+        protocolBox.setValue(cfg.resolveThirdPartyProtocol().name());
+        protocolBox.setPrefWidth(220);
         TextArea result = new TextArea();
         result.setEditable(false);
         result.setWrapText(true);
         result.setPrefRowCount(5);
 
-        grid.addRow(0, label("Base URL"), baseUrl);
-        grid.addRow(1, label("API Key"), apiKey);
-        grid.addRow(2, label("Model ID"), modelId);
+        grid.addRow(0, label("Protocol"), protocolBox);
+        grid.addRow(1, label("Base URL"), baseUrl);
+        grid.addRow(2, label("API Key"), apiKey);
+        grid.addRow(3, label("Model ID"), modelId);
 
         HBox actions = new HBox(10);
         Button save = new Button("Save Config");
         Button test = new Button("Test Connection");
         actions.getChildren().addAll(save, test);
-        grid.add(actions, 1, 3);
-        grid.add(label("Result"), 0, 4);
-        grid.add(result, 1, 4);
+        grid.add(actions, 1, 4);
+        grid.add(label("Result"), 0, 5);
+        grid.add(result, 1, 5);
 
         save.setOnAction(e -> {
             cfg.setBaseUrl(baseUrl.getText());
             cfg.setApiKey(apiKey.getText());
             cfg.setModelId(modelId.getText());
+            cfg.setThirdPartyProtocol(protocolBox.getValue());
             cfg.setUseOfficialApi(false);
             store.save(state);
             result.setText("Configuration saved.");
@@ -86,6 +95,7 @@ public class AiConfigView {
             cfg.setBaseUrl(baseUrl.getText());
             cfg.setApiKey(apiKey.getText());
             cfg.setModelId(modelId.getText());
+            cfg.setThirdPartyProtocol(protocolBox.getValue());
             cfg.setUseOfficialApi(false);
             store.save(state);
             result.setText("Testing...");

@@ -903,6 +903,8 @@ public class AiChatView {
                 case "get_chapter_outline" ->
                     book.getChapterOutline(requiredStringArg(args, "volume_name"),
                             requiredStringArg(args, "chapter_name"));
+                case "search_chapter_content" ->
+                    book.searchChapterContent(requiredStringArg(args, "query"));
                 case "get_chapter_content" ->
                     book.getChapterContent(requiredStringArg(args, "volume_name"),
                             requiredStringArg(args, "chapter_name"));

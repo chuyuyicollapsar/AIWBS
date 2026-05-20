@@ -33,9 +33,13 @@ public class AiClient {
     private static final Duration TEST_TIMEOUT = Duration.ofSeconds(60);
     private static final Duration CHAT_TIMEOUT = Duration.ofMinutes(5);
     private static final int MAX_TOOL_ROUNDS = 10;
+    private final OpenAiResponsesClient responsesClient = new OpenAiResponsesClient();
 
     public String testConnection(AiConfig config) throws Exception {
         validate(config);
+        if (isOpenAiResponses(config)) {
+            return responsesClient.testConnection(config);
+        }
         List<ChatMessage> messages = List.of(
                 SystemMessage.from("You are a writing assistant."),
                 UserMessage.from("Reply with exactly: OK")
@@ -73,6 +77,9 @@ public class AiClient {
     public ChatResult chatWithTools(AiConfig config, String systemPrompt, List<String> messageJsonObjects,
                                     ToolExecutor toolExecutor) throws Exception {
         validate(config);
+        if (isOpenAiResponses(config)) {
+            return responsesClient.chat(config, systemPrompt, messageJsonObjects, toolExecutor);
+        }
         List<ChatMessage> messages = toMessages(systemPrompt, messageJsonObjects);
         ChatModel model = chatModel(config, CHAT_TIMEOUT);
         List<ToolSpecification> tools = toolExecutor == null ? List.of() : ToolDefinitions.langChainTools();
@@ -101,6 +108,9 @@ public class AiClient {
     public ChatResult streamWithTools(AiConfig config, String systemPrompt, List<String> messageJsonObjects,
                                       ToolExecutor toolExecutor, StreamListener listener) throws Exception {
         validate(config);
+        if (isOpenAiResponses(config)) {
+            return responsesClient.stream(config, systemPrompt, messageJsonObjects, toolExecutor, listener);
+        }
         List<ChatMessage> messages = toMessages(systemPrompt, messageJsonObjects);
         StreamingChatModel model = streamingChatModel(config, CHAT_TIMEOUT);
         List<ToolSpecification> tools = toolExecutor == null ? List.of() : ToolDefinitions.langChainTools();
@@ -199,7 +209,7 @@ public class AiClient {
     }
 
     private ChatModel chatModel(AiConfig config, Duration timeout) {
-        if (isAnthropicOfficial(config)) {
+        if (isAnthropicMessages(config)) {
             AnthropicChatModel.AnthropicChatModelBuilder builder = AnthropicChatModel.builder()
                     .baseUrl(config.effectiveBaseUrl())
                     .apiKey(config.effectiveApiKey())
@@ -226,7 +236,7 @@ public class AiClient {
     }
 
     private StreamingChatModel streamingChatModel(AiConfig config, Duration timeout) {
-        if (isAnthropicOfficial(config)) {
+        if (isAnthropicMessages(config)) {
             AnthropicStreamingChatModel.AnthropicStreamingChatModelBuilder builder = AnthropicStreamingChatModel.builder()
                     .baseUrl(config.effectiveBaseUrl())
                     .apiKey(config.effectiveApiKey())
@@ -350,8 +360,18 @@ public class AiClient {
         return messages;
     }
 
-    private boolean isAnthropicOfficial(AiConfig config) {
-        return config.isUseOfficialApi() && config.resolveOfficialProvider() == AiConfig.OfficialProvider.ANTHROPIC;
+    private boolean isAnthropicMessages(AiConfig config) {
+        if (config.isUseOfficialApi()) {
+            return config.resolveOfficialProvider() == AiConfig.OfficialProvider.ANTHROPIC;
+        }
+        return config.resolveThirdPartyProtocol() == AiConfig.AiProtocol.ANTHROPIC_MESSAGES;
+    }
+
+    private boolean isOpenAiResponses(AiConfig config) {
+        if (config.isUseOfficialApi()) {
+            return config.resolveOfficialProvider() == AiConfig.OfficialProvider.OPENAI;
+        }
+        return config.resolveThirdPartyProtocol() == AiConfig.AiProtocol.RESPONSES;
     }
 
     private boolean shouldSendTemperature(AiConfig config) {

@@ -222,6 +222,48 @@ public class Book implements Serializable {
         return content == null || content.isEmpty() ? "（该章无正文）" : content;
     }
 
+    public String searchChapterContent(String query) {
+        String needle = query == null ? "" : query.trim();
+        if (needle.isEmpty()) return "[Error] Missing required argument: query";
+
+        List<String> results = new ArrayList<>();
+        int totalMatches = 0;
+        for (int vi = 0; vi < volumes.size(); vi++) {
+            Volume volume = volumes.get(vi);
+            List<Chapter> chapters = volume.getChapters();
+            for (int ci = 0; ci < chapters.size(); ci++) {
+                Chapter chapter = chapters.get(ci);
+                String content = chapter.getContent();
+                if (content == null || content.isBlank()) continue;
+                int nextSearchStart = 0;
+                int chapterSnippets = 0;
+                while (nextSearchStart < content.length()) {
+                    int matchStart = indexOfIgnoreCase(content, needle, nextSearchStart);
+                    if (matchStart < 0) break;
+                    totalMatches++;
+                    if (results.size() < SEARCH_RESULT_LIMIT && chapterSnippets < SEARCH_SNIPPETS_PER_CHAPTER) {
+                        results.add("volume_name: " + volume.getName() + "\n"
+                                + "chapter_name: " + chapter.getTitle() + "\n"
+                                + "location: Volume " + (vi + 1) + ", Chapter " + (ci + 1) + "\n"
+                                + "snippet: " + snippetAround(content, matchStart, needle.length()));
+                        chapterSnippets++;
+                    }
+                    nextSearchStart = Math.max(matchStart + needle.length(), matchStart + 1);
+                }
+            }
+        }
+
+        if (totalMatches == 0) return "(No chapter content matched: " + displayName(query) + ")";
+        StringBuilder sb = new StringBuilder();
+        sb.append("Found ").append(totalMatches).append(" match(es) for: ").append(needle).append('\n');
+        sb.append("Showing ").append(results.size())
+                .append(" result(s). Use get_chapter_content with the listed volume_name and chapter_name for full text.");
+        for (int i = 0; i < results.size(); i++) {
+            sb.append("\n\n").append(i + 1).append(". ").append(results.get(i));
+        }
+        return sb.toString();
+    }
+
     private static final Volume DUPLICATE_VOLUME = new Volume("__duplicate_volume_marker__");
 
     private Volume findUniqueVolume(String volumeName) {
@@ -271,6 +313,26 @@ public class Book implements Serializable {
         String normalized = normalizeName(value);
         return normalized.isEmpty() ? "空名称" : normalized;
     }
+
+    private static int indexOfIgnoreCase(String content, String needle, int start) {
+        int max = content.length() - needle.length();
+        for (int i = Math.max(0, start); i <= max; i++) {
+            if (content.regionMatches(true, i, needle, 0, needle.length())) return i;
+        }
+        return -1;
+    }
+
+    private static String snippetAround(String content, int matchStart, int matchLength) {
+        int start = Math.max(0, matchStart - SEARCH_SNIPPET_RADIUS);
+        int end = Math.min(content.length(), matchStart + matchLength + SEARCH_SNIPPET_RADIUS);
+        String prefix = start > 0 ? "..." : "";
+        String suffix = end < content.length() ? "..." : "";
+        return prefix + content.substring(start, end).replaceAll("\\s+", " ").trim() + suffix;
+    }
+
+    private static final int SEARCH_RESULT_LIMIT = 12;
+    private static final int SEARCH_SNIPPETS_PER_CHAPTER = 2;
+    private static final int SEARCH_SNIPPET_RADIUS = 80;
 
     private record ChapterLookup(Chapter chapter, String error) {
         static ChapterLookup chapter(Chapter chapter) {

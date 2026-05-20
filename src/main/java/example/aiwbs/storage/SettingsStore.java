@@ -99,6 +99,7 @@ final class SettingsStore {
         String baseUrl = "";
         String apiKey = "";
         String modelId = "";
+        String thirdPartyProtocol = AiConfig.AiProtocol.CHAT_COMPLETIONS.name();
         boolean useOfficialApi;
         String officialProvider = AiConfig.OfficialProvider.OPENAI.name();
         String officialApiKey = "";
@@ -110,6 +111,7 @@ final class SettingsStore {
             data.baseUrl = safe(config.getBaseUrl());
             data.apiKey = safe(config.getApiKey());
             data.modelId = safe(config.getModelId());
+            data.thirdPartyProtocol = safe(config.getThirdPartyProtocol(), AiConfig.AiProtocol.CHAT_COMPLETIONS.name());
             data.useOfficialApi = config.isUseOfficialApi();
             data.officialProvider = safe(config.getOfficialProvider(), AiConfig.OfficialProvider.OPENAI.name());
             data.officialApiKey = safe(config.getOfficialApiKey());
@@ -122,6 +124,7 @@ final class SettingsStore {
             config.setBaseUrl(safe(baseUrl));
             config.setApiKey(safe(apiKey));
             config.setModelId(safe(modelId));
+            config.setThirdPartyProtocol(safe(thirdPartyProtocol, AiConfig.AiProtocol.CHAT_COMPLETIONS.name()));
             config.setUseOfficialApi(useOfficialApi);
             config.setOfficialProvider(safe(officialProvider, AiConfig.OfficialProvider.OPENAI.name()));
             config.setOfficialApiKey(safe(officialApiKey));

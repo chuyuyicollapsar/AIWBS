@@ -33,6 +33,11 @@ public class ToolDefinitions {
                         "volume_name", obj("type", "string", "description", "分卷名，必须使用目录中的完整分卷名称"),
                         "chapter_name", obj("type", "string", "description", "章节名，必须使用目录中的完整章节名称")),
                    "required", arr("volume_name", "chapter_name"))));
+        tools.add(func("search_chapter_content",
+                "Search all chapter prose/body text for a keyword or phrase. Returns matching volume and chapter names plus short snippets. Use get_chapter_content afterward when full text is needed.",
+                obj("type", "object", "properties", obj(
+                        "query", obj("type", "string", "description", "Keyword or phrase to search for in chapter prose/body text.")),
+                   "required", arr("query"))));
         tools.add(func("get_chapter_content",
                 "获取指定章节的完整正文内容。注意：正文可能较长，请先通过 get_chapter_outline 了解章节内容。",
                 obj("type", "object", "properties", obj(
@@ -81,9 +86,50 @@ public class ToolDefinitions {
                                 .addStringProperty("chapter_name", "Chapter name. Use the exact full name from the table of contents.")
                                 .required("volume_name", "chapter_name")
                                 .build()
+                ),
+                tool(
+                        "search_chapter_content",
+                        "Search all chapter prose/body text for a keyword or phrase. Returns matching volume and chapter names plus short snippets. Use get_chapter_content afterward when full text is needed.",
+                        JsonObjectSchema.builder()
+                                .addStringProperty("query", "Keyword or phrase to search for in chapter prose/body text.")
+                                .required("query")
+                                .build()
                 )
         );
         return cachedLangChainTools;
+    }
+
+    public static JsonArray openAiResponseTools() {
+        JsonArray tools = new JsonArray();
+        tools.add(responseTool("get_table_of_contents",
+                "Get the current book table of contents: all volume names, chapter names, and chapter word counts.",
+                obj("type", "object", "properties", new JsonObject(), "required", new JsonArray())));
+        tools.add(responseTool("get_outline_tree",
+                "Get the current book outline tree as JSON. The children array is the only source of parent-child structure; headings inside content are plain text.",
+                obj("type", "object", "properties", new JsonObject(), "required", new JsonArray())));
+        tools.add(responseTool("get_volume_outline",
+                "Get the detailed outline for a specific volume.",
+                obj("type", "object", "properties", obj(
+                        "volume_name", obj("type", "string", "description", "Volume name. Use the exact full name from the table of contents.")),
+                   "required", arr("volume_name"))));
+        tools.add(responseTool("get_chapter_outline",
+                "Get the detailed outline for a specific chapter.",
+                obj("type", "object", "properties", obj(
+                        "volume_name", obj("type", "string", "description", "Volume name. Use the exact full name from the table of contents."),
+                        "chapter_name", obj("type", "string", "description", "Chapter name. Use the exact full name from the table of contents.")),
+                   "required", arr("volume_name", "chapter_name"))));
+        tools.add(responseTool("search_chapter_content",
+                "Search all chapter prose/body text for a keyword or phrase. Returns matching volume and chapter names plus short snippets. Use get_chapter_content afterward when full text is needed.",
+                obj("type", "object", "properties", obj(
+                        "query", obj("type", "string", "description", "Keyword or phrase to search for in chapter prose/body text.")),
+                   "required", arr("query"))));
+        tools.add(responseTool("get_chapter_content",
+                "Get the full prose content for a specific chapter. Content may be long; inspect the chapter outline first when possible.",
+                obj("type", "object", "properties", obj(
+                        "volume_name", obj("type", "string", "description", "Volume name. Use the exact full name from the table of contents."),
+                        "chapter_name", obj("type", "string", "description", "Chapter name. Use the exact full name from the table of contents.")),
+                   "required", arr("volume_name", "chapter_name"))));
+        return tools;
     }
 
     private static ToolSpecification tool(String name, String description, JsonObjectSchema parameters) {
@@ -107,6 +153,16 @@ public class ToolDefinitions {
         wrapper.addProperty("type", "function");
         wrapper.add("function", f);
         return wrapper;
+    }
+
+    private static JsonObject responseTool(String name, String description, JsonObject parameters) {
+        JsonObject tool = new JsonObject();
+        tool.addProperty("type", "function");
+        tool.addProperty("name", name);
+        tool.addProperty("description", description);
+        tool.add("parameters", parameters);
+        tool.addProperty("strict", false);
+        return tool;
     }
 
     private static JsonObject obj(Object... kv) {
