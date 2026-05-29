@@ -97,8 +97,9 @@ public class AiClient {
                 return new ChatResult("[Error] Tool call loop exceeded max depth", "", response.toString());
             }
             messages.add(aiMessage);
+            int toolRound = depth + 1;
             for (ToolExecutionRequest toolCall : aiMessage.toolExecutionRequests()) {
-                String result = toolExecutor.execute(toolCall.name(), toolCall.arguments());
+                String result = toolExecutor.execute(toolCall.name(), toolCall.arguments(), toolRound);
                 messages.add(ToolExecutionResultMessage.from(toolCall, result));
             }
         }
@@ -189,8 +190,9 @@ public class AiClient {
             }
 
             messages.add(aiMessage);
+            int toolRound = depth + 1;
             for (ToolExecutionRequest toolCall : aiMessage.toolExecutionRequests()) {
-                String result = toolExecutor.execute(toolCall.name(), toolCall.arguments());
+                String result = toolExecutor.execute(toolCall.name(), toolCall.arguments(), toolRound);
                 messages.add(ToolExecutionResultMessage.from(toolCall, result));
             }
         }
@@ -230,7 +232,7 @@ public class AiClient {
                 .returnThinking(true)
                 .sendThinking(true)
                 .strictTools(false)
-                .parallelToolCalls(false);
+                .parallelToolCalls(true);
         applyOpenAiThinking(builder, config);
         return builder.build();
     }
@@ -257,7 +259,7 @@ public class AiClient {
                 .returnThinking(true)
                 .sendThinking(true)
                 .strictTools(false)
-                .parallelToolCalls(false)
+                .parallelToolCalls(true)
                 .accumulateToolCallId(true);
         applyOpenAiThinking(builder, config);
         return builder.build();
@@ -435,7 +437,11 @@ public class AiClient {
 
     @FunctionalInterface
     public interface ToolExecutor {
-        String execute(String name, String argsJson);
+        String execute(String name, String argsJson, int toolRound);
+
+        default String execute(String name, String argsJson) {
+            return execute(name, argsJson, 1);
+        }
     }
 
     public interface StreamListener {

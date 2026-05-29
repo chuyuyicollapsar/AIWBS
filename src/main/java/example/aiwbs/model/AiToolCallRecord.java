@@ -18,6 +18,7 @@ public class AiToolCallRecord {
     private long durationMs;
     private int resultSize;
     private String error;
+    private int toolRound;
 
     public AiToolCallRecord() {
         this.id = UUID.randomUUID().toString();
@@ -25,12 +26,18 @@ public class AiToolCallRecord {
         this.startedAt = System.currentTimeMillis();
         this.argumentsJson = "";
         this.error = "";
+        this.toolRound = 1;
     }
 
     public AiToolCallRecord(String name, String argumentsJson) {
         this();
         this.name = name;
         this.argumentsJson = argumentsJson == null ? "" : argumentsJson;
+    }
+
+    public AiToolCallRecord(String name, String argumentsJson, int toolRound) {
+        this(name, argumentsJson);
+        this.toolRound = Math.max(1, toolRound);
     }
 
     public String getId() { return id; }
@@ -51,6 +58,8 @@ public class AiToolCallRecord {
     public void setResultSize(int resultSize) { this.resultSize = resultSize; }
     public String getError() { return error; }
     public void setError(String error) { this.error = error; }
+    public int getToolRound() { return Math.max(1, toolRound); }
+    public void setToolRound(int toolRound) { this.toolRound = Math.max(1, toolRound); }
 
     public void completeSuccess(String result) {
         long now = System.currentTimeMillis();

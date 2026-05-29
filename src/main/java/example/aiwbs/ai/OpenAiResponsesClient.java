@@ -51,8 +51,9 @@ final class OpenAiResponsesClient {
                 return new AiClient.ChatResult("[Error] Tool call loop exceeded max depth", "", lastRaw);
             }
             addOutputItems(input, response, List.of());
+            int toolRound = depth + 1;
             for (ResponseToolCall toolCall : toolCalls) {
-                input.add(toolResult(toolCall, toolExecutor.execute(toolCall.name(), toolCall.arguments())));
+                input.add(toolResult(toolCall, toolExecutor.execute(toolCall.name(), toolCall.arguments(), toolRound)));
             }
         }
         return new AiClient.ChatResult("[Error] Tool call loop exceeded max depth", "", lastRaw);
@@ -101,9 +102,10 @@ final class OpenAiResponsesClient {
             } else {
                 addOutputItems(input, response, round.outputItems.values());
             }
+            int toolRound = depth + 1;
             for (ResponseToolCall toolCall : toolCalls) {
                 if (listener != null) listener.onToolCall(toolCall.name());
-                input.add(toolResult(toolCall, toolExecutor.execute(toolCall.name(), toolCall.arguments())));
+                input.add(toolResult(toolCall, toolExecutor.execute(toolCall.name(), toolCall.arguments(), toolRound)));
             }
         }
         return new AiClient.ChatResult(totalContent.toString(), "", lastRaw);
@@ -119,7 +121,7 @@ final class OpenAiResponsesClient {
         if (withTools) {
             body.add("tools", ToolDefinitions.openAiResponseTools());
             body.addProperty("tool_choice", "auto");
-            body.addProperty("parallel_tool_calls", false);
+            body.addProperty("parallel_tool_calls", true);
         }
         addReasoning(body, config);
         if (forcedText != null) body.addProperty("text", forcedText);

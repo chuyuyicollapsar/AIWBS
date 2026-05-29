@@ -828,7 +828,7 @@ public class AiChatView {
                 cfg,
                 sys,
                 messages,
-                (name, argsJson) -> executeTool(sessionId, node, name, argsJson),
+                (name, argsJson, toolRound) -> executeTool(sessionId, node, name, argsJson, toolRound),
                 new AiClient.StreamListener() {
                     @Override
                     public void onContentDelta(String delta) {
@@ -904,11 +904,11 @@ public class AiChatView {
      * Execute a book tool call and return the result string.
      */
     private String executeTool(String name, String argsJson) {
-        return executeTool(null, null, name, argsJson);
+        return executeTool(null, null, name, argsJson, 1);
     }
 
-    private String executeTool(String sessionId, AiMessage node, String name, String argsJson) {
-        AiToolCallRecord record = node == null ? null : beginToolCall(sessionId, node, name, argsJson);
+    private String executeTool(String sessionId, AiMessage node, String name, String argsJson, int toolRound) {
+        AiToolCallRecord record = node == null ? null : beginToolCall(sessionId, node, name, argsJson, toolRound);
         try {
             JsonObject args = JsonParser.parseString(argsJson).getAsJsonObject();
             String result = switch (name) {
@@ -935,8 +935,8 @@ public class AiChatView {
         }
     }
 
-    private AiToolCallRecord beginToolCall(String sessionId, AiMessage node, String name, String argsJson) {
-        AiToolCallRecord record = new AiToolCallRecord(name, argsJson);
+    private AiToolCallRecord beginToolCall(String sessionId, AiMessage node, String name, String argsJson, int toolRound) {
+        AiToolCallRecord record = new AiToolCallRecord(name, argsJson, toolRound);
         Platform.runLater(() -> {
             toolCallsFor(sessionId, node).add(record);
             if (node.getAssistantContent() == null || node.getAssistantContent().isBlank()) {
@@ -1261,7 +1261,7 @@ public class AiChatView {
             VBox item = new VBox(4);
             item.setStyle("-fx-background-color: rgba(255,255,255,0.05); -fx-background-radius: 8; -fx-padding: 8 10;");
 
-            Label title = new Label(toolStatus(call) + " " + safeText(call.getName()) + toolMeta(call));
+            Label title = new Label("Round " + call.getToolRound() + " - " + toolStatus(call) + " " + safeText(call.getName()) + toolMeta(call));
             title.setStyle("-fx-text-fill: #dce5ff; -fx-font-size: 12px; -fx-font-weight: bold;");
 
             Label args = new Label("Args: " + compact(call.getArgumentsJson()));
@@ -1298,8 +1298,10 @@ public class AiChatView {
     private String toolSummary(List<AiToolCallRecord> calls) {
         long running = calls.stream().filter(c -> c.getStatus() == AiToolCallRecord.Status.RUNNING).count();
         long errors = calls.stream().filter(c -> c.getStatus() == AiToolCallRecord.Status.ERROR).count();
+        int rounds = calls.stream().mapToInt(AiToolCallRecord::getToolRound).max().orElse(1);
         int chars = calls.stream().mapToInt(AiToolCallRecord::getResultSize).sum();
         StringBuilder summary = new StringBuilder("Tools - ").append(calls.size()).append(calls.size() == 1 ? " execution" : " executions");
+        if (rounds > 1) summary.append(" - ").append(rounds).append(" rounds");
         if (running > 0) summary.append(" - ").append(running).append(" running");
         if (errors > 0) summary.append(" - ").append(errors).append(errors == 1 ? " error" : " errors");
         if (chars > 0) summary.append(" - ").append(formatChars(chars));
