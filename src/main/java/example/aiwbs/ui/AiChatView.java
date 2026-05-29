@@ -6,9 +6,11 @@ import example.aiwbs.ai.AiClient;
 import example.aiwbs.model.AiConfig;
 import example.aiwbs.model.AiMessage;
 import example.aiwbs.model.AiSession;
+import example.aiwbs.model.AiToolCallRecord;
 import example.aiwbs.model.AppState;
 import example.aiwbs.model.Book;
 import example.aiwbs.storage.AiSessionStore;
+import example.aiwbs.storage.AiToolCallStore;
 import example.aiwbs.storage.StateStore;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -46,6 +48,7 @@ public class AiChatView {
 
     private final BorderPane root = new BorderPane();
     private final AiSessionStore store;
+    private final AiToolCallStore toolCallStore;
     private final AppState appState;
     private final StateStore stateStore;
     private final AiClient aiClient = new AiClient();
@@ -69,6 +72,8 @@ public class AiChatView {
     private final Set<String> pendingAssistantNodes = new HashSet<>();
     private final Set<String> expandedReasoningNodes = new HashSet<>();
     private final Set<String> collapsedReasoningNodes = new HashSet<>();
+    private final Set<String> expandedToolCallNodes = new HashSet<>();
+    private final Map<String, List<AiToolCallRecord>> toolCallsByMessageId = new HashMap<>();
     private List<AiMessage> currentPath = new ArrayList<>();
     private boolean sessionVis = true;
     private boolean navVis = true;
@@ -84,6 +89,7 @@ public class AiChatView {
         this.stateStore = stateStore;
         this.book = book;
         this.store = new AiSessionStore(book.getId());
+        this.toolCallStore = new AiToolCallStore(book.getId());
         buildUI();
         loadSessions();
     }
@@ -343,6 +349,8 @@ public class AiChatView {
         pendingAssistantNodes.clear();
         expandedReasoningNodes.clear();
         collapsedReasoningNodes.clear();
+        expandedToolCallNodes.clear();
+        toolCallsByMessageId.clear();
         pathNodeFocusedIdx = 0;
         loadSessions();
         scrollToMessageNode(0);
@@ -375,12 +383,15 @@ public class AiChatView {
         ViewUtils.styleDialog(a.getDialogPane());
         a.showAndWait().filter(ButtonType.OK::equals).ifPresent(ok -> {
             store.delete(s);
+            toolCallStore.deleteSession(s.getId());
             if (currentSession != null && currentSession.getId().equals(s.getId())) {
                 currentSession = null;
                 branchSel.clear();
                 pendingAssistantNodes.clear();
                 expandedReasoningNodes.clear();
                 collapsedReasoningNodes.clear();
+                expandedToolCallNodes.clear();
+                toolCallsByMessageId.clear();
                 List<AiSession> rem = store.loadAll();
                 if (!rem.isEmpty()) selectSession(rem.getFirst());
                 else { loadSessions(); refreshNav(); refreshMessages(); }
@@ -782,7 +793,7 @@ public class AiChatView {
 
         new Thread(() -> {
             try {
-                AssistantReply resp = streamWithTools(cfg, SYSTEM_PROMPT, messages, node);
+                AssistantReply resp = streamWithTools(cfg, SYSTEM_PROMPT, messages, node, session.getId());
                 Platform.runLater(() -> {
                     node.setAssistantContent(resp.content());
                     node.setAssistantReasoningContent(resp.reasoningContent());
@@ -810,14 +821,14 @@ public class AiChatView {
         }).start();
     }
 
-    private AssistantReply streamWithTools(AiConfig cfg, String sys, List<String> messages, AiMessage node) throws Exception {
+    private AssistantReply streamWithTools(AiConfig cfg, String sys, List<String> messages, AiMessage node, String sessionId) throws Exception {
         AtomicBoolean firstContent = new AtomicBoolean(true);
         AtomicBoolean firstReasoning = new AtomicBoolean(true);
         AiClient.ChatResult result = aiClient.streamWithTools(
                 cfg,
                 sys,
                 messages,
-                this::executeTool,
+                (name, argsJson) -> executeTool(sessionId, node, name, argsJson),
                 new AiClient.StreamListener() {
                     @Override
                     public void onContentDelta(String delta) {
@@ -893,9 +904,14 @@ public class AiChatView {
      * Execute a book tool call and return the result string.
      */
     private String executeTool(String name, String argsJson) {
+        return executeTool(null, null, name, argsJson);
+    }
+
+    private String executeTool(String sessionId, AiMessage node, String name, String argsJson) {
+        AiToolCallRecord record = node == null ? null : beginToolCall(sessionId, node, name, argsJson);
         try {
             JsonObject args = JsonParser.parseString(argsJson).getAsJsonObject();
-            return switch (name) {
+            String result = switch (name) {
                 case "get_table_of_contents" -> book.getTableOfContents();
                 case "get_outline_tree" -> book.getOutlineTreeString();
                 case "get_volume_outline" ->
@@ -904,15 +920,66 @@ public class AiChatView {
                     book.getChapterOutline(requiredStringArg(args, "volume_name"),
                             requiredStringArg(args, "chapter_name"));
                 case "search_chapter_content" ->
-                    book.searchChapterContent(requiredStringArg(args, "query"));
+                        book.searchChapterContent(requiredStringArg(args, "query"));
                 case "get_chapter_content" ->
-                    book.getChapterContent(requiredStringArg(args, "volume_name"),
-                            requiredStringArg(args, "chapter_name"));
+                        book.getChapterContent(requiredStringArg(args, "volume_name"),
+                                requiredStringArg(args, "chapter_name"));
                 default -> "[Error] Unknown tool: " + name;
             };
+            if (record != null) finishToolCall(sessionId, node, record, result, null);
+            return result;
         } catch (Exception e) {
-            return "[Error executing " + name + "] " + e.getMessage();
+            String result = "[Error executing " + name + "] " + e.getMessage();
+            if (record != null) finishToolCall(sessionId, node, record, result, e.getMessage());
+            return result;
         }
+    }
+
+    private AiToolCallRecord beginToolCall(String sessionId, AiMessage node, String name, String argsJson) {
+        AiToolCallRecord record = new AiToolCallRecord(name, argsJson);
+        Platform.runLater(() -> {
+            toolCallsFor(sessionId, node).add(record);
+            if (node.getAssistantContent() == null || node.getAssistantContent().isBlank()) {
+                node.setAssistantContent("Reading book context...");
+            }
+            if (isCurrentSession(node)) {
+                refreshMessages();
+            }
+        });
+        return record;
+    }
+
+    private void finishToolCall(String sessionId, AiMessage node, AiToolCallRecord record, String result, String error) {
+        Platform.runLater(() -> {
+            if (error == null || error.isBlank()) {
+                record.completeSuccess(result);
+            } else {
+                record.completeError(error);
+            }
+            saveToolCalls(sessionId, node);
+            if (isCurrentSession(node)) {
+                refreshMessages();
+            }
+        });
+    }
+
+    private List<AiToolCallRecord> toolCallsFor(AiMessage node) {
+        if (currentSession == null) return new ArrayList<>();
+        return toolCallsFor(currentSession.getId(), node);
+    }
+
+    private List<AiToolCallRecord> toolCallsFor(String sessionId, AiMessage node) {
+        return toolCallsByMessageId.computeIfAbsent(toolCallKey(sessionId, node.getId()), key ->
+                sessionId == null ? new ArrayList<>() : toolCallStore.load(sessionId, node.getId()));
+    }
+
+    private void saveToolCalls(String sessionId, AiMessage node) {
+        if (sessionId == null) return;
+        toolCallStore.save(sessionId, node.getId(), toolCallsFor(sessionId, node));
+    }
+
+    private String toolCallKey(String sessionId, String messageId) {
+        return (sessionId == null ? "" : sessionId) + "::" + messageId;
     }
 
     private String requiredStringArg(JsonObject args, String name) {
@@ -957,7 +1024,7 @@ public class AiChatView {
             List<String> json = flatten(ctx, cfg);
             new Thread(() -> {
                 try {
-                    AssistantReply resp = streamWithTools(cfg, SYSTEM_PROMPT, json, sib);
+                    AssistantReply resp = streamWithTools(cfg, SYSTEM_PROMPT, json, sib, session.getId());
                     Platform.runLater(() -> {
                         sib.setAssistantContent(resp.content());
                         sib.setAssistantReasoningContent(resp.reasoningContent());
@@ -1029,6 +1096,7 @@ public class AiChatView {
 
     private void deleteTurn(AiMessage node) {
         if (currentSession == null) return;
+        deleteToolCallsRecursive(currentSession.getId(), node);
         AiMessage parent = findParent(node);
         if (parent != null) {
             parent.getChildren().remove(node);
@@ -1044,6 +1112,16 @@ public class AiChatView {
         pathNodeFocusedIdx = Math.min(pathNodeFocusedIdx, currentPath.size() - 1);
         if (pathNodeFocusedIdx < 0 && !currentPath.isEmpty()) pathNodeFocusedIdx = 0;
         refreshMessages();
+    }
+
+    private void deleteToolCallsRecursive(String sessionId, AiMessage node) {
+        if (node == null) return;
+        toolCallStore.deleteMessage(sessionId, node.getId());
+        toolCallsByMessageId.remove(toolCallKey(sessionId, node.getId()));
+        expandedToolCallNodes.remove(node.getId());
+        for (AiMessage child : node.getChildren()) {
+            deleteToolCallsRecursive(sessionId, child);
+        }
     }
 
     private void renameTurnTitle(AiMessage node) {
@@ -1161,17 +1239,105 @@ public class AiChatView {
             col.getChildren().add(pending);
         }
 
+        if (!toolCallsFor(node).isEmpty()) {
+            col.getChildren().add(createToolCallsPanel(node));
+        }
+
         HBox wrap = new HBox(col);
         wrap.setAlignment(Pos.CENTER_LEFT);
         wrap.setPadding(new Insets(2, 16, 2, 16));
         return wrap;
     }
 
+    private Node createToolCallsPanel(AiMessage node) {
+        List<AiToolCallRecord> calls = toolCallsFor(node);
+        boolean expanded = expandedToolCallNodes.contains(node.getId());
+        VBox details = new VBox(8);
+        details.setVisible(expanded);
+        details.setManaged(expanded);
+        details.setStyle("-fx-background-color: rgba(15, 23, 48, 0.64); -fx-background-radius: 10; -fx-padding: 10 12;");
+
+        for (AiToolCallRecord call : calls) {
+            VBox item = new VBox(4);
+            item.setStyle("-fx-background-color: rgba(255,255,255,0.05); -fx-background-radius: 8; -fx-padding: 8 10;");
+
+            Label title = new Label(toolStatus(call) + " " + safeText(call.getName()) + toolMeta(call));
+            title.setStyle("-fx-text-fill: #dce5ff; -fx-font-size: 12px; -fx-font-weight: bold;");
+
+            Label args = new Label("Args: " + compact(call.getArgumentsJson()));
+            args.setWrapText(true);
+            args.setMaxWidth(560);
+            args.setStyle("-fx-text-fill: #9da9cf; -fx-font-size: 11px;");
+
+            item.getChildren().addAll(title, args);
+            if (call.getStatus() == AiToolCallRecord.Status.ERROR && call.getError() != null && !call.getError().isBlank()) {
+                Label error = new Label("Error: " + call.getError());
+                error.setWrapText(true);
+                error.setMaxWidth(560);
+                error.setStyle("-fx-text-fill: #ffb4a8; -fx-font-size: 11px;");
+                item.getChildren().add(error);
+            }
+            details.getChildren().add(item);
+        }
+
+        Button toggle = new Button((expanded ? "Hide " : "Show ") + toolSummary(calls));
+        toggle.setFocusTraversable(false);
+        toggle.setStyle("-fx-background-color: transparent; -fx-text-fill: #8ea0d6; -fx-padding: 0 0 0 0; -fx-cursor: hand;");
+        toggle.setOnAction(e -> {
+            boolean show = !details.isVisible();
+            if (show) expandedToolCallNodes.add(node.getId());
+            else expandedToolCallNodes.remove(node.getId());
+            details.setVisible(show);
+            details.setManaged(show);
+            toggle.setText((show ? "Hide " : "Show ") + toolSummary(calls));
+        });
+
+        return new VBox(6, toggle, details);
+    }
+
+    private String toolSummary(List<AiToolCallRecord> calls) {
+        long running = calls.stream().filter(c -> c.getStatus() == AiToolCallRecord.Status.RUNNING).count();
+        long errors = calls.stream().filter(c -> c.getStatus() == AiToolCallRecord.Status.ERROR).count();
+        int chars = calls.stream().mapToInt(AiToolCallRecord::getResultSize).sum();
+        StringBuilder summary = new StringBuilder("Tools - ").append(calls.size()).append(calls.size() == 1 ? " execution" : " executions");
+        if (running > 0) summary.append(" - ").append(running).append(" running");
+        if (errors > 0) summary.append(" - ").append(errors).append(errors == 1 ? " error" : " errors");
+        if (chars > 0) summary.append(" - ").append(formatChars(chars));
+        return summary.toString();
+    }
+
+    private String toolStatus(AiToolCallRecord call) {
+        return switch (call.getStatus()) {
+            case RUNNING -> "Running";
+            case SUCCESS -> "Done";
+            case ERROR -> "Error";
+        };
+    }
+
+    private String toolMeta(AiToolCallRecord call) {
+        if (call.getStatus() == AiToolCallRecord.Status.RUNNING) return "";
+        StringBuilder meta = new StringBuilder(" - ").append(call.getDurationMs()).append("ms");
+        if (call.getResultSize() > 0) meta.append(" - ").append(formatChars(call.getResultSize()));
+        return meta.toString();
+    }
+
+    private String formatChars(int chars) {
+        return chars >= 1000 ? String.format("%.1fk chars", chars / 1000.0) : chars + " chars";
+    }
+
+    private String compact(String value) {
+        String text = safeText(value).replace('\n', ' ').replace('\r', ' ').trim();
+        return text.length() > 260 ? text.substring(0, 260) + "..." : text;
+    }
+
+    private String safeText(String value) {
+        return value == null ? "" : value;
+    }
+
     private boolean shouldShowReasoning(AiMessage node) {
         if (collapsedReasoningNodes.contains(node.getId())) return false;
         if (expandedReasoningNodes.contains(node.getId())) return true;
-        return pendingAssistantNodes.contains(node.getId())
-                && (node.getAssistantContent() == null || node.getAssistantContent().isBlank());
+        return pendingAssistantNodes.contains(node.getId());
     }
 
     private static final class AssistantReply {
